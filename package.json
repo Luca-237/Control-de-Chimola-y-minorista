@@ -1,0 +1,11 @@
+{
+  "name": "control-minorista-chimola",
+  "private": true,
+  "description": "Consultas y ventas de los locales minoristas (Cindy Minorista y Chimola).",
+  "scripts": {
+    "test": "node --test \"pruebas/*.test.*\""
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.13"
+  }
+}
