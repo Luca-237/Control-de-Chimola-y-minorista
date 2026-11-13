@@ -66,7 +66,7 @@ Si la función no está publicada o falla, el campo avisa y deja elegir "Otro pr
 
 ## 8. Datos del cliente en "Lo piensa" (migraciones 3 y 4)
 
-Una consulta que queda en "Lo piensa" tiene que llevar **al menos un dato del cliente**: el nombre, el teléfono (WhatsApp) o el usuario (Instagram), para poder seguirla. Con uno alcanza. La base lo exige; en las demás consultas es opcional. Si se escribe un teléfono o un usuario, la página revisa que se pueda usar (teléfono con al menos 6 números; usuario sin espacios, que se guarda como `@usuario`). En "Lo piensan" cada tarjeta muestra los datos y, si hay teléfono o usuario, un botón para escribirle por WhatsApp o abrir su Instagram.
+Una consulta que queda en "Lo piensa" tiene que llevar **al menos un dato del cliente**: el nombre, el teléfono (WhatsApp) o el usuario (Instagram), para poder seguirla. Con uno alcanza. La base lo exige; en las demás consultas es opcional. El teléfono y el usuario van en la misma casilla, **"Usuario o nro. telefónico"**, en cualquier canal: la página reconoce cuál es y revisa que se pueda usar (teléfono con al menos 6 números; usuario sin espacios, que se guarda como `@usuario`). En "Lo piensan" cada tarjeta muestra los datos y, si hay teléfono o usuario, un botón para escribirle por WhatsApp o abrir su Instagram.
 
 1. **SQL Editor**: correr, en este orden y **después** de la migración 2:
    - `supabase/migrations/20261113200000_cliente_lo_piensa.sql` (agrega las columnas a `consultas`, actualiza `guardar_consulta` y la vista `consultas_vista`).

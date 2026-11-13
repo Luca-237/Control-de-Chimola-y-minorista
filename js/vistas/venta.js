@@ -198,7 +198,7 @@
       <div class="form-grid">
         <div><label for="ed-cliente-nombre">Cliente: nombre <span id="ed-cliente-req">${estado === "lo_piensa" ? "(o teléfono / usuario: al menos uno)" : "(opcional)"}</span></label>
           <input type="text" id="ed-cliente-nombre" maxlength="120" autocapitalize="words" value="${esc(c.cliente_nombre || "")}"></div>
-        <div><label for="ed-cliente-contacto" id="ed-cliente-contacto-label">Teléfono o usuario</label>
+        <div><label for="ed-cliente-contacto" id="ed-cliente-contacto-label">Usuario o nro. telefónico</label>
           <input type="text" id="ed-cliente-contacto" maxlength="80" value="${esc(c.cliente_contacto || "")}"></div>
       </div>
       <label>Nota</label><input type="text" id="ed-nota" maxlength="300" value="${esc(c.nota || "")}">
@@ -257,28 +257,28 @@
   }
 
   // ---------- Datos del cliente (en "Lo piensa" alcanza con uno: nombre, teléfono o usuario) ----------
-  // Qué se pide según el canal: teléfono para WhatsApp, usuario para Instagram
+  // Una sola casilla que acepta las dos cosas, en cualquier canal: usuario de Instagram o número de teléfono.
+  // Solo cambia el ejemplo, según por dónde consultó.
   function campoContacto(canal) {
-    if (/insta/i.test(canal || "")) return { tipo: "usuario", label: "Usuario de Instagram", placeholder: "@usuario", modo: "text" };
-    if (/whats/i.test(canal || "")) return { tipo: "telefono", label: "Teléfono (WhatsApp)", placeholder: "Ej. 353 4123456", modo: "tel" };
-    return { tipo: "otro", label: "Teléfono o usuario", placeholder: "Teléfono o @usuario", modo: "text" };
+    const placeholder = /whats/i.test(canal || "") ? "Ej. 353 4123456 o @usuario" : "Ej. @usuario o 353 4123456";
+    return { label: "Usuario o nro. telefónico", placeholder, modo: "text" };
   }
+  // ¿Lo escrito es un teléfono? Solo números, espacios, guiones, paréntesis, puntos o un + adelante
+  const pareceTelefono = s => /^\+?[\d\s().-]+$/.test(s) && /\d/.test(s);
   // Devuelve { ok, nombre, contacto } listos para guardar, o { ok: false, error, campo }
-  function validarCliente(nombre, contacto, canal) {
+  function validarCliente(nombre, contacto) {
     nombre = String(nombre || "").replace(/\s+/g, " ").trim();
     contacto = String(contacto || "").trim();
-    if (!nombre && !contacto) return { ok: false, campo: "nombre", error: "Completá al menos un dato del cliente: nombre, teléfono o usuario." };
+    if (!nombre && !contacto) return { ok: false, campo: "nombre", error: "Completá al menos un dato del cliente: nombre, usuario o nro. telefónico." };
     if (!contacto) return { ok: true, nombre, contacto: "" };   // con el nombre alcanza
-    // Si escribieron teléfono o usuario, se revisa que se pueda usar para escribirle
-    const tipo = campoContacto(canal).tipo;
-    const digitos = contacto.replace(/\D/g, "");
-    if (tipo === "usuario" || (tipo === "otro" && /^@|[a-z_]/i.test(contacto))) {
-      const u = contacto.replace(/^@+/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "");
-      if (!/^[a-z0-9._]{2,30}$/i.test(u)) return { ok: false, campo: "contacto", error: "Revisá el usuario de Instagram: solo letras, números, puntos y guiones bajos." };
-      return { ok: true, nombre, contacto: "@" + u.toLowerCase() };
+    // Si escribieron usuario o teléfono, se revisa que se pueda usar para escribirle
+    if (pareceTelefono(contacto)) {
+      if (contacto.replace(/\D/g, "").length < 6) return { ok: false, campo: "contacto", error: "Revisá el teléfono: tiene muy pocos números (o borralo y dejá solo el nombre)." };
+      return { ok: true, nombre, contacto: contacto.replace(/\s+/g, " ") };
     }
-    if (digitos.length < 6) return { ok: false, campo: "contacto", error: "Revisá el teléfono: tiene muy pocos números (o borralo y dejá solo el nombre)." };
-    return { ok: true, nombre, contacto };
+    const u = contacto.replace(/^@+/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/[/?#].*$/, "");
+    if (!/^[a-z0-9._]{2,30}$/i.test(u)) return { ok: false, campo: "contacto", error: "Revisá el usuario: solo letras, números, puntos y guiones bajos, sin espacios. Si es un teléfono, escribí solo los números." };
+    return { ok: true, nombre, contacto: "@" + u.toLowerCase() };
   }
   // Enlace para escribirle (WhatsApp o Instagram), o null
   function enlaceContacto(contacto) {
