@@ -1,5 +1,5 @@
 // Color de fondo a gusto. Desde un solo color se calculan todos los tonos que lo acompañan
-// (bordes, encabezados de tabla, filas bajo el mouse, esqueletos de carga, textos y el modo oscuro),
+// (bordes, encabezados de tabla, filas bajo el mouse, esqueletos de carga y textos) del modo claro,
 // y se pone una hoja de estilos que pisa los tonos de css/app.css. Se guarda en este navegador.
 // Para que siempre se lea bien, el color se lleva a un tono pastel: se respeta el matiz y la
 // intensidad, pero la luminosidad se limita (en claro, entre 78 % y 93 %).
@@ -64,7 +64,10 @@
   // Hoja de estilos: pisa :root en claro y en los dos modos oscuros (manual y automático)
   function css(hex) {
     const { claro, oscuro } = paleta(hex);
-    return `:root{${bloque(claro)}}\n:root[data-tema="oscuro"]{${bloque(oscuro)}}\n@media (prefers-color-scheme: dark){:root:not([data-tema="claro"]){${bloque(oscuro)}}}`;
+    // Solo el modo claro: el oscuro es siempre el negro neutro de css/app.css (sin tinte del color elegido).
+    // Va con :not([data-tema="oscuro"]) para no pisar los tonos oscuros al cambiar de tema.
+    void oscuro;
+    return `:root:not([data-tema="oscuro"]){${bloque(claro)}}`;
   }
 
   const esDefecto = hex => !hex || hex.toLowerCase() === DEFECTO.toLowerCase();
