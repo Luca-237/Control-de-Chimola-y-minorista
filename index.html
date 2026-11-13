@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<!-- Tema elegido (claro/oscuro) antes de dibujar, para que no parpadee. Sin elegir = como el sistema -->
+<script>try { var t = localStorage.getItem("cmc-tema"); if (t === "claro" || t === "oscuro") document.documentElement.dataset.tema = t; } catch (e) {}</script>
+<title>Consultas y ventas · Cindy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23e84e1b'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='20' fill='%23fff'%3EC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css?v=20261113.4">
+<script src="js/color.js?v=20261113.4"></script>
+<script>try { ColorFondo.aplicar(ColorFondo.leer()); } catch (e) {}</script>
+</head>
+<body>
+
+<!-- ============ Falta configurar la conexión ============ -->
+<section class="pantalla" id="pantalla-config" hidden>
+  <button type="button" class="btn-tema" data-tema-boton aria-label="Tema: automático" title="Tema: automático"></button>
+  <div class="tarjeta">
+    <header class="marca">
+      <span class="isotipo" aria-hidden="true">C</span>
+      <span><span class="titulo">Consultas y ventas</span><span class="sub">Cindy Minorista · Chimola</span></span>
+    </header>
+    <p><strong>Falta conectar la base de datos.</strong></p>
+    <p>Completá <code>supabaseUrl</code> y <code>supabaseKey</code> en <code>js/config.js</code> y recargá la página.</p>
+    <p>El paso a paso está en <code>SUPABASE-SETUP.md</code>.</p>
+  </div>
+</section>
+
+<!-- ============ Cargando ============ -->
+<section id="pantalla-carga" aria-busy="true">
+  <span class="sr-only">Cargando…</span>
+  <div class="app esq-app" aria-hidden="true">
+    <header class="barra">
+      <div class="marca"><span class="isotipo">C</span><span><span class="titulo">Consultas y ventas</span><span class="sub">Cindy Minorista · Chimola</span></span></div>
+      <span class="esq" style="width:140px; height:30px; border-radius:999px"></span><span class="esq" style="width:34px; height:34px; border-radius:50%"></span>
+    </header>
+    <nav class="lateral"><a><span class="esq" style="width:18px; height:18px; border-radius:5px; flex:none"></span><span class="esq" style="width:60%; height:12px"></span></a><a><span class="esq" style="width:18px; height:18px; border-radius:5px; flex:none"></span><span class="esq" style="width:72%; height:12px"></span></a><a><span class="esq" style="width:18px; height:18px; border-radius:5px; flex:none"></span><span class="esq" style="width:55%; height:12px"></span></a><a><span class="esq" style="width:18px; height:18px; border-radius:5px; flex:none"></span><span class="esq" style="width:68%; height:12px"></span></a></nav>
+    <main class="contenido">
+      <div class="vista-head"><div style="flex:1"><span class="esq" style="width:180px; height:26px"></span><span class="esq" style="width:260px; height:12px; margin-top:10px"></span></div></div>
+      <div class="kpis"><div class="kpi"><span class="esq" style="width:55%; height:10px"></span><span class="esq" style="width:38%; height:28px; margin-top:12px"></span></div><div class="kpi"><span class="esq" style="width:65%; height:10px"></span><span class="esq" style="width:38%; height:28px; margin-top:12px"></span></div><div class="kpi"><span class="esq" style="width:75%; height:10px"></span><span class="esq" style="width:38%; height:28px; margin-top:12px"></span></div></div>
+      <div class="caja"><span class="esq" style="width:100%; height:220px; border-radius:10px"></span></div>
+    </main>
+  </div>
+</section>
+
+<!-- ============ Login ============ -->
+<section class="pantalla" id="pantalla-login" hidden>
+  <button type="button" class="btn-tema" data-tema-boton aria-label="Tema: automático" title="Tema: automático"></button>
+  <form class="tarjeta" id="form-login" autocomplete="on">
+    <header class="marca">
+      <span class="isotipo" aria-hidden="true">C</span>
+      <span><span class="titulo">Consultas y ventas</span><span class="sub">Cindy Minorista · Chimola</span></span>
+    </header>
+    <label for="login-email">Usuario</label>
+    <input id="login-email" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+    <label for="login-password">Contraseña</label>
+    <input id="login-password" type="password" autocomplete="current-password" required>
+    <button class="btn" id="login-btn" type="submit">Ingresar</button>
+    <div class="mensaje-error" id="login-error" role="alert"></div>
+  </form>
+</section>
+
+<!-- ============ Aplicación ============ -->
+<div class="app" id="app" hidden>
+  <header class="barra">
+    <button type="button" class="btn-menu" id="btn-menu" aria-label="Abrir menú">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+    </button>
+    <div class="marca">
+      <span class="isotipo" aria-hidden="true">C</span>
+      <span><span class="titulo">Consultas y ventas</span><span class="sub">Cindy Minorista · Chimola</span></span>
+    </div>
+    <label class="local-actual" id="local-actual" hidden title="Local">
+      <span class="sr-only">Local</span>
+      <select id="local-selector" aria-label="Local"></select>
+      <span id="local-nombre" hidden></span>
+    </label>
+    <label class="ver-como" id="ver-como-caja" hidden title="Probar la página como la verían los demás usuarios">
+      <span>Ver como</span>
+      <select id="ver-como" aria-label="Ver la página como">
+        <option value="">Administrador</option>
+        <option value="carga">Operador (prueba)</option>
+        <option value="consulta">Consulta (prueba)</option>
+      </select>
+    </label>
+    <button type="button" class="btn-tema" id="btn-actualizar" aria-label="Actualizar los datos" title="Actualizar los datos desde la base"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+    <button type="button" class="btn-tema" data-tema-boton aria-label="Tema: automático" title="Tema: automático"></button>
+    <div class="usuario">
+      <span class="quien"><span id="usuario-nombre"></span><span class="rol" id="usuario-rol"></span></span>
+      <button type="button" class="link" id="salir">Salir</button>
+    </div>
+  </header>
+
+  <nav class="lateral" id="lateral" aria-label="Secciones">
+    <a href="#tablero" data-vista="tablero" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+      Tablero</a>
+    <a href="#planilla" data-vista="planilla" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+      Planilla</a>
+    <a href="#cargar" data-vista="cargar" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+      Cargar consulta</a>
+    <a href="#abiertos" data-vista="abiertos" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Lo piensan<span class="contador" id="contador-abiertos" hidden></span></a>
+    <a href="#recientes" data-vista="recientes" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+      Recientes</a>
+    <a href="#configuracion" data-vista="configuracion" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      Configuración</a>
+    <a href="#usuarios" data-vista="usuarios" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Usuarios y empleados</a>
+    <a href="#tablero" class="volver-admin" id="lateral-volver" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+      Volver a administrador</a>
+  </nav>
+
+  <main class="contenido">
+    <div class="banner-prueba" id="banner-prueba" role="status" hidden>
+      <p id="banner-prueba-texto"></p>
+      <button type="button" class="btn-sec primario" id="banner-prueba-volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Volver a administrador</button>
+    </div>
+    <!-- ======== Tablero ======== -->
+    <section id="vista-tablero" data-seccion hidden>
+      <div class="vista-head">
+        <div><h1>Tablero</h1><p class="sub">Consultas y ventas de los locales, con sus medidas y gráficos.</p></div>
+      </div>
+      <div class="barra-filtros">
+        <div><label for="tb-periodo">Período</label><select id="tb-periodo"></select></div>
+        <div id="tb-rango" hidden><label>Desde y hasta</label><div class="rango-propio"><input type="date" id="tb-desde" aria-label="Desde"><input type="date" id="tb-hasta" aria-label="Hasta"></div></div>
+        <div><label for="tb-comparar">Comparar con</label><select id="tb-comparar">
+          <option value="periodo">Período anterior</option><option value="anio">Mismo período del año pasado</option><option value="no">No comparar</option></select></div>
+        <div><label for="tb-canal">Canal</label><select id="tb-canal"></select></div>
+        <div><label for="tb-vendedor">Vendedor</label><select id="tb-vendedor"></select></div>
+      </div>
+      <p class="periodo-texto" id="tb-periodo-texto"></p>
+      <div class="kpis" id="tb-kpis"></div>
+      <div class="graficos" id="tb-graficos"></div>
+    </section>
+
+    <!-- ======== Planilla ======== -->
+    <section id="vista-planilla" data-seccion hidden>
+      <div class="vista-head">
+        <div><h1>Planilla</h1><p class="sub">Todas las consultas cargadas, con lo que se vendió en cada una.</p></div>
+        <div class="controles">
+          <button type="button" class="btn-sec" id="pl-exportar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>Exportar a Excel</button>
+        </div>
+      </div>
+      <div class="caja">
+        <div class="filtros">
+          <div><label for="pl-desde">Desde</label><input type="date" id="pl-desde"></div>
+          <div><label for="pl-hasta">Hasta</label><input type="date" id="pl-hasta"></div>
+          <div><label for="pl-canal">Canal</label><select id="pl-canal"></select></div>
+          <div><label for="pl-estado">Resultado</label><select id="pl-estado">
+            <option value="">Todas (sin anuladas)</option><option value="compro">Compró</option><option value="lo_piensa">Lo piensa</option>
+            <option value="vencida">Vencida</option><option value="no_compro">No compró</option><option value="anulada">Anuladas</option><option value="todas">Todas, con anuladas</option></select></div>
+          <div style="flex:1; min-width:200px"><label for="pl-buscar">Buscar</label><div class="buscar-wrap">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="search" id="pl-buscar" placeholder="Producto, cliente, vendedor, nota…"></div></div>
+        </div>
+        <p class="periodo-texto" id="pl-resumen"></p>
+        <div class="tabla-wrap"><table class="tabla grilla">
+          <thead><tr><th>Fecha</th><th id="pl-th-local">Local</th><th>Canal</th><th>Resultado</th><th>Atendió</th><th>Artículos</th><th class="num">Unid.</th><th class="num">Monto</th><th>Envío</th><th>Pago</th><th>Venta / nota</th></tr></thead>
+          <tbody id="pl-cuerpo"></tbody>
+        </table></div>
+        <button type="button" class="btn-sec" id="pl-mas" hidden style="margin-top:12px"></button>
+      </div>
+    </section>
+
+    <!-- ======== Cargar ======== -->
+    <section id="vista-cargar" data-seccion hidden>
+      <div class="vista-head">
+        <div><h1>Nueva consulta</h1><p class="sub">Cargala apenas termina la charla. Local: <strong id="cargar-local"></strong></p></div>
+      </div>
+      <div class="caja" id="cargar-sin-local" hidden><p class="vacio">Elegí un local en el selector de arriba para cargar una consulta.</p></div>
+      <div class="carga-layout">
+      <div class="carga" id="cargar-cuerpo">
+        <div class="contador-dia" id="cargar-contador"></div>
+        <div class="carga-cab">
+          <div id="cargar-atendio-wrap"><label for="cargar-atendio">Atendió</label><select id="cargar-atendio"></select></div>
+        </div>
+        <details class="mas-datos" id="cargar-mas">
+          <summary>Otra fecha u hora, o una nota (opcional)</summary>
+          <div class="form-grid caja">
+            <div><label for="cargar-fecha">Fecha y hora de la consulta</label><input type="datetime-local" id="cargar-fecha"><p class="hint">Vacío = ahora.</p></div>
+            <div><label for="cargar-nota">Nota</label><input type="text" id="cargar-nota" maxlength="300" placeholder="Ej. preguntó por la mochila roja"></div>
+          </div>
+        </details>
+        <div class="paso" id="paso-canal">
+          <p class="paso-titulo"><span class="n">1</span>¿Por dónde consultó?</p>
+          <div class="opciones-grandes" id="paso-canal-opciones"></div>
+        </div>
+        <div class="paso" id="paso-resultado">
+          <p class="paso-titulo"><span class="n">2</span>¿Cómo terminó?</p>
+          <div class="opciones-grandes">
+            <button type="button" class="opcion-grande compro" data-resultado="compro" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Compró<small>Después cargás qué se llevó</small></button>
+            <button type="button" class="opcion-grande lo-piensa" data-resultado="lo_piensa" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Lo piensa<small>Pedile nombre y contacto</small></button>
+            <button type="button" class="opcion-grande" data-resultado="no_compro" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>No compró<small>Se guarda al tocar</small></button>
+          </div>
+        </div>
+        <div class="paso" id="cargar-venta" hidden>
+          <p class="paso-titulo"><span class="n">3</span>¿Qué se llevó?</p>
+          <div id="cargar-venta-form"></div>
+          <div class="acciones-carga">
+            <button type="button" class="btn" id="cargar-guardar-venta">Guardar venta</button>
+            <button type="button" class="btn-sec" id="cargar-cancelar-venta">Cancelar</button>
+          </div>
+        </div>
+        <div class="paso" id="cargar-cliente" hidden>
+          <p class="paso-titulo"><span class="n">3</span>¿Quién es? Para poder seguirla</p>
+          <div class="caja form-grid">
+            <div class="campo" data-campo="nombre"><label for="cargar-cliente-nombre">Nombre y apellido</label>
+              <input type="text" id="cargar-cliente-nombre" maxlength="120" autocomplete="off" autocapitalize="words" placeholder="Ej. Ana Pérez"></div>
+            <div class="campo" data-campo="contacto"><label for="cargar-cliente-contacto" id="cargar-cliente-contacto-label">Teléfono o usuario</label>
+              <input type="text" id="cargar-cliente-contacto" maxlength="80" autocomplete="off"></div>
+          </div>
+          <div class="acciones-carga">
+            <button type="button" class="btn" id="cargar-guardar-cliente">Guardar en Lo piensan</button>
+            <button type="button" class="btn-sec" id="cargar-cancelar-cliente">Cancelar</button>
+          </div>
+        </div>
+        <div class="mensaje-error" id="cargar-error" role="alert"></div>
+      </div>
+      <aside class="historial-rapido" id="cargar-historial" aria-label="Últimas ventas" hidden>
+        <div class="hist-cab">
+          <h2>Últimas ventas</h2>
+          <button type="button" class="link" id="hist-actualizar" title="Volver a pedir las ventas a la base">Actualizar</button>
+        </div>
+        <div class="hist-resumen" id="hist-resumen"></div>
+        <div class="hist-lista" id="hist-lista" aria-live="polite"></div>
+      </aside>
+      </div>
+    </section>
+
+    <!-- ======== Lo piensan ======== -->
+    <section id="vista-abiertos" data-seccion hidden>
+      <div class="vista-head"><div><h1>Lo piensan</h1><p class="sub" id="abiertos-resumen"></p></div></div>
+      <div id="abiertos-lista"></div>
+      <div id="abiertos-vencidas"></div>
+    </section>
+
+    <!-- ======== Recientes ======== -->
+    <section id="vista-recientes" data-seccion hidden>
+      <div class="vista-head"><div><h1>Recientes</h1><p class="sub" id="recientes-sub"></p></div></div>
+      <div id="recientes-lista"></div>
+    </section>
+
+    <!-- ======== Configuración ======== -->
+    <section id="vista-configuracion" data-seccion hidden>
+      <div class="vista-head"><div><h1>Configuración</h1><p class="sub">Listas de cada local y apariencia.</p></div></div>
+      <div class="caja" data-solo-admin hidden>
+        <h2>Local</h2>
+        <div class="form-grid">
+          <div><label for="cfg-local">Local a configurar</label><select id="cfg-local"></select></div>
+          <div><label for="cfg-nombre">Nombre</label><input type="text" id="cfg-nombre" maxlength="60"></div>
+          <div><label for="cfg-dias-piensa">Días hasta que un "Lo piensa" vence</label><input type="number" id="cfg-dias-piensa" min="1" max="90"></div>
+          <div><label for="cfg-horas">Horas que el local puede corregir lo cargado</label><input type="number" id="cfg-horas" min="0" max="720"></div>
+          <div><label for="cfg-dias-atraso">Días hacia atrás que puede cargar</label><input type="number" id="cfg-dias-atraso" min="0" max="60"></div>
+          <div><label for="cfg-color-local">Color del local</label><input type="color" id="cfg-color-local" style="height:40px; padding:3px"></div>
+          <div class="full"><label class="interruptor" style="margin-top:12px"><input type="checkbox" id="cfg-activo"><span class="interruptor-pista"></span>Local activo</label></div>
+        </div>
+        <div class="dlg-pie"><button type="button" class="btn-sec primario" id="cfg-guardar-local">Guardar datos del local</button></div>
+      </div>
+      <div class="caja" data-solo-admin hidden>
+        <h2>Listas y vendedores</h2>
+        <div class="pestanas" id="cfg-pestanas" role="tablist"></div>
+        <ul class="lista-edit" id="cfg-lista"></ul>
+        <form class="agregar-fila" id="cfg-agregar"><input type="text" id="cfg-nuevo" maxlength="60"><button type="submit" class="btn-sec">Agregar</button></form>
+        <p class="hint">Los cambios se guardan solos. Las opciones no se borran: se desactivan, así lo ya cargado no cambia. El número es el orden en que aparecen.</p>
+      </div>
+      <div class="caja">
+        <h2>Color de fondo</h2>
+        <div class="cfg-fila">
+          <div class="cfg-sugeridos" id="cfg-sugeridos"></div>
+          <label class="cfg-propio">Otro color<input type="color" id="cfg-color-propio"><strong id="cfg-color-hex"></strong></label>
+        </div>
+        <p class="hint">Solo cambia en este navegador.</p>
+      </div>
+    </section>
+
+    <!-- ======== Usuarios ======== -->
+    <section id="vista-usuarios" data-seccion hidden>
+      <div class="vista-head">
+        <div><h1>Usuarios y empleados</h1><p class="sub">Quién entra a la página y quiénes atienden en cada local.</p></div>
+        <div class="controles"><button type="button" class="btn-sec primario" id="us-nuevo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>Nuevo usuario</button></div>
+      </div>
+      <div class="caja">
+        <h2>Usuarios de la página</h2>
+        <p class="hint" style="margin-top:0"><strong>Local</strong>: carga y corrige en sus locales (pantallas simples). <strong>Consulta</strong>: ve tablero y planilla de todos, sin cargar. <strong>Admin</strong>: todo. Los cambios de rol, nombre y locales se guardan solos.</p>
+        <div class="tabla-wrap"><table class="tabla grilla">
+          <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Locales</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="us-cuerpo"></tbody>
+        </table></div>
+      </div>
+      <div class="caja">
+        <h2>Empleados de cada local</h2>
+        <p class="hint" style="margin-top:0">Son los nombres que aparecen en "Atendió" al cargar una consulta y en el gráfico por vendedor. No necesitan usuario. Si alguien deja de trabajar, desactivalo: lo que ya cargó no cambia.</p>
+        <div class="empleados" id="us-empleados"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ Diálogos ============ -->
+<dialog class="dlg ancho" id="dlg-editar">
+  <div class="dlg-head"><h3 id="editar-titulo"></h3><button type="button" class="btn-cerrar" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+  <div class="dlg-body" id="editar-cuerpo"></div>
+</dialog>
+
+<dialog class="dlg ancho" id="dlg-cerrar">
+  <div class="dlg-head"><h3>Compró</h3><button type="button" class="btn-cerrar" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+  <div class="dlg-body">
+    <p class="hint" id="cerrar-sub"></p>
+    <div id="cerrar-atendio-wrap" style="max-width:280px"><label for="cerrar-atendio">Atendió</label><select id="cerrar-atendio"></select></div>
+    <div id="cerrar-venta" style="margin-top:14px"></div>
+    <div class="mensaje-error" id="cerrar-error" role="alert"></div>
+    <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar>Cancelar</button><button type="button" class="btn-sec primario" id="cerrar-guardar">Guardar venta</button></div>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="dlg-usuario">
+  <form id="form-usuario" autocomplete="off">
+    <div class="dlg-head"><h3>Nuevo usuario</h3><button type="button" class="btn-cerrar" data-cerrar aria-label="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+    <div class="dlg-body">
+      <div id="nu-formulario">
+        <label for="nu-nombre">Nombre (cómo se muestra)</label>
+        <input type="text" id="nu-nombre" maxlength="60" required placeholder="Ej. Chimola o Mariela">
+        <label for="nu-usuario">Usuario para entrar</label>
+        <input type="text" id="nu-usuario" maxlength="40" required autocapitalize="off" spellcheck="false" placeholder="Ej. chimola">
+        <p class="hint" id="nu-usuario-hint"></p>
+        <label for="nu-password">Contraseña</label>
+        <div class="agregar-fila"><input type="text" id="nu-password" minlength="8" required autocapitalize="off" spellcheck="false"><button type="button" class="btn-sec" id="nu-generar">Generar otra</button></div>
+        <p class="hint">Mínimo 8 caracteres. Anotala antes de crear: después no se vuelve a mostrar (se puede cambiar).</p>
+        <label for="nu-rol">Rol</label>
+        <select id="nu-rol"><option value="carga">Local (carga consultas)</option><option value="consulta">Consulta (solo mira)</option><option value="admin">Admin</option></select>
+        <div id="nu-locales-wrap"><label>Locales donde carga</label><div class="locales-usuario" id="nu-locales"></div></div>
+        <div class="mensaje-error" id="nu-error" role="alert"></div>
+        <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar>Cancelar</button><button type="submit" class="btn-sec primario" id="nu-crear">Crear usuario</button></div>
+      </div>
+      <div id="nu-listo" hidden>
+        <p>El usuario quedó creado y habilitado. Pasale estos datos a quien lo va a usar:</p>
+        <div class="datos-acceso" id="nu-datos"></div>
+        <div class="dlg-pie"><button type="button" class="btn-sec" id="nu-copiar">Copiar</button><button type="button" class="btn-sec primario" data-cerrar>Listo</button></div>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="dlg-pedir">
+  <form id="form-pedir">
+    <div class="dlg-head"><h3 id="pedir-titulo"></h3></div>
+    <div class="dlg-body">
+      <p class="hint" id="pedir-texto"></p>
+      <div id="pedir-campo-wrap"><label for="pedir-campo" id="pedir-campo-label"></label><input type="text" id="pedir-campo" maxlength="200"></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar>Cancelar</button><button type="submit" class="btn-sec primario" id="pedir-ok">Aceptar</button></div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+<script src="js/config.js?v=20261113.4"></script>
+<script src="js/utils.js?v=20261113.4"></script>
+<script src="js/medidas.js?v=20261113.4"></script>
+<script src="js/graficos.js?v=20261113.4"></script>
+<script src="js/api.js?v=20261113.4"></script>
+<script src="js/vistas/acceso.js?v=20261113.4"></script>
+<script src="js/buscador-producto.js?v=20261113.4"></script>
+<script src="js/vistas/venta.js?v=20261113.4"></script>
+<script src="js/vistas/cargar.js?v=20261113.4"></script>
+<script src="js/vistas/abiertos.js?v=20261113.4"></script>
+<script src="js/vistas/tablero.js?v=20261113.4"></script>
+<script src="js/vistas/planilla.js?v=20261113.4"></script>
+<script src="js/vistas/configuracion.js?v=20261113.4"></script>
+<script src="js/main.js?v=20261113.4"></script>
+</body>
+</html>

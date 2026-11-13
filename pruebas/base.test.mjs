@@ -167,8 +167,29 @@ test('fechas: nada futuro y hasta 7 días atrás para el local', async () => {
   assert.ok(id > 0);
 });
 
+test('"Lo piensa" exige nombre completo y teléfono o usuario; quedan guardados al cerrarla', async () => {
+  const base = { local_id: L['Cindy Minorista'], canal_id: cm().canal.Instagram, estado: 'lo_piensa' };
+  await assert.rejects(guardar(U.cindy, base), /nombre completo y el teléfono o usuario/);
+  await assert.rejects(guardar(U.cindy, { ...base, cliente_nombre: 'Ana Pérez', cliente_contacto: '  ' }), /nombre completo/);
+  const id = await guardar(U.cindy, { ...base, cliente_nombre: '  Ana Pérez ', cliente_contacto: '@ana.perez' });
+  const v = (await como(U.cindy, 'select cliente_nombre, cliente_contacto from public.consultas_vista where id = $1', [id]))[0];
+  assert.deepEqual(v, { cliente_nombre: 'Ana Pérez', cliente_contacto: '@ana.perez' });
+  // Corregir sin mandar los datos del cliente no los borra; pasarla a "lo piensa" sin datos no se puede
+  await guardar(U.cindy, { id, estado: 'lo_piensa', nota: 'vuelve el sábado' });
+  assert.equal((await fila(id)).cliente_nombre, 'Ana Pérez');
+  await assert.rejects(guardar(U.cindy, { id, estado: 'lo_piensa', cliente_contacto: '' }), /nombre completo/);
+  await cerrar(U.cindy, id, { estado: 'no_compro' });
+  assert.equal((await fila(id)).cliente_contacto, '@ana.perez');
+  // En las otras consultas el cliente es opcional
+  const otra = await guardar(U.cindy, { local_id: L['Cindy Minorista'], canal_id: cm().canal.WhatsApp, estado: 'no_compro' });
+  assert.equal((await fila(otra)).cliente_nombre, '');
+  // Chimola no ve los datos del cliente de Cindy Minorista
+  assert.equal((await como(U.chimola, 'select 1 from public.consultas_vista where id = $1', [id])).length, 0);
+});
+
 test('"Lo piensa": se cierra cuando sea, la venta cae en la fecha del cierre y vence a los 15 días', async () => {
-  const id = await guardar(U.cindy, { local_id: L['Cindy Minorista'], canal_id: cm().canal.WhatsApp, estado: 'lo_piensa' });
+  const id = await guardar(U.cindy, { local_id: L['Cindy Minorista'], canal_id: cm().canal.WhatsApp, estado: 'lo_piensa',
+    cliente_nombre: 'Juan Gómez', cliente_contacto: '3534 123456' });
   await db.query(`update public.consultas set creado_en = now() - interval '20 days', fecha_consulta = now() - interval '20 days' where id = $1`, [id]);
   const v = (await como(U.mariela, 'select estado_efectivo from public.consultas_vista where id = $1', [id]))[0];
   assert.equal(v.estado_efectivo, 'vencida');
@@ -213,4 +234,54 @@ test('configuración: solo el admin cambia listas y usuarios; nunca queda sin ad
   const cambio = await como(U.cindy, `update public.perfiles set rol = 'admin' where id = '${U.cindy}' returning id`);
   assert.equal(cambio.length, 0);
   await assert.rejects(como(U.admin, `update public.perfiles set activo = false where id = '${U.admin}'`), /último admin/);
+});
+
+// ---------- Producto del catálogo (buscador) ----------
+const itemCatalogo = (extra = {}) => ({
+  catalogo: true, producto: 'MOCHILA NBA LAKERS', producto_clave: 'mochila nba lakers|41283913', categoria: 'Urbanas',
+  categoria_ruta: 'Marroquinería > Mochilas > Urbanas', categoria_tn_id: 41284162, cantidad: 2, monto: 64000, ...extra,
+});
+
+test('catálogo: un artículo del buscador no necesita rubro ni marca y guarda producto y categoría', async () => {
+  const id = await guardar(U.cindy, ventaCindy({ items: [itemCatalogo(), { rubro_id: cm().rubro.Billeteras, cantidad: 1, monto: 15000 }] }));
+  const filas = await como(U.cindy,
+    'select producto, producto_clave, categoria, categoria_ruta, categoria_tn_id, catalogo, rubro, rubro_web, subrubro_web, cantidad, monto from public.venta_items_vista where consulta_id = $1 order by id', [id]);
+  assert.equal(filas.length, 2);
+  assert.equal(filas[0].producto, 'MOCHILA NBA LAKERS');
+  assert.equal(filas[0].categoria, 'Urbanas');
+  assert.equal(filas[0].categoria_ruta, 'Marroquinería > Mochilas > Urbanas');
+  assert.equal(Number(filas[0].categoria_tn_id), 41284162);
+  assert.equal(filas[0].catalogo, true);
+  assert.equal(filas[0].rubro, null);
+  assert.equal(filas[0].rubro_web, 'Marroquinería');
+  assert.equal(filas[0].subrubro_web, 'Mochilas');
+  // el artículo de texto libre sigue con su rubro de la lista y sin datos de catálogo
+  assert.equal(filas[1].catalogo, false);
+  assert.equal(filas[1].rubro, 'Billeteras');
+  assert.equal(filas[1].producto, '');
+  assert.equal(filas[1].rubro_web, null);
+  assert.equal(Number((await fila(id)).monto_total), 79000);
+});
+
+test('catálogo: sin producto o sin categoría se rechaza; el texto libre sigue pidiendo rubro', async () => {
+  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ producto: '  ' })] })), /Falta el producto/);
+  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ categoria: '' })] })), /Falta la categoría/);
+  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, cantidad: 1, monto: 10 }] })), /rubro/);
+  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ cantidad: 0 })] })), /entero mayor a cero/);
+  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ monto: -5 })] })), /monto/);
+});
+
+test('catálogo: un artículo de texto libre no arrastra datos de producto aunque se los manden', async () => {
+  const id = await guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, producto: 'X', categoria: 'Y', categoria_ruta: 'A > B', rubro_id: cm().rubro.Mochilas, cantidad: 1, monto: 100 }] }));
+  const f = (await como(U.cindy, 'select producto, categoria, categoria_ruta, catalogo from public.venta_items_vista where consulta_id = $1', [id]))[0];
+  assert.deepEqual(f, { producto: '', categoria: '', categoria_ruta: '', catalogo: false });
+});
+
+test('catálogo: corregir una venta cambia el producto y los permisos de lectura siguen igual', async () => {
+  const id = await guardar(U.cindy, ventaCindy({ items: [itemCatalogo()] }));
+  await guardar(U.cindy, { id, estado: 'compro', envio_id: cm().envio['Retiro en el local'], pago_id: cm().pago.QR,
+    items: [itemCatalogo({ producto: 'MOCHILA NBA SPURS', producto_clave: 'mochila nba spurs|41284162' })] });
+  assert.equal((await como(U.mariela, 'select producto from public.venta_items_vista where consulta_id = $1', [id]))[0].producto, 'MOCHILA NBA SPURS');
+  // Chimola no ve los artículos de Cindy Minorista
+  assert.equal((await como(U.chimola, 'select 1 from public.venta_items_vista where consulta_id = $1', [id])).length, 0);
 });
