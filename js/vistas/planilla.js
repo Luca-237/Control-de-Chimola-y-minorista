@@ -81,7 +81,7 @@
         <td class="num">${c.estado === "compro" ? fmtPesos(c.monto_total) : ""}</td>
         <td>${esc(c.envio || "")}</td>
         <td>${esc(c.pago || "")}</td>
-        <td>${c.estado === "compro" && c.dia_venta !== c.dia_consulta ? fmtFecha(c.dia_venta) : ""}${c.cliente_nombre ? `<small>${esc(c.cliente_nombre)} · ${esc(c.cliente_contacto)}</small>` : ""}${c.nota ? `<small>${esc(c.nota)}</small>` : ""}${c.anulada ? `<small>Anulada: ${esc(c.anulada_motivo)}</small>` : ""}</td>
+        <td>${c.estado === "compro" && c.dia_venta !== c.dia_consulta ? fmtFecha(c.dia_venta) : ""}${c.cliente_nombre || c.cliente_contacto ? `<small>${esc([c.cliente_nombre, c.cliente_contacto].filter(Boolean).join(" · "))}</small>` : ""}${c.nota ? `<small>${esc(c.nota)}</small>` : ""}${c.anulada ? `<small>Anulada: ${esc(c.anulada_motivo)}</small>` : ""}</td>
       </tr>`;
     }).join("");
     $("pl-mas").hidden = visibles.length <= mostradas;
@@ -135,7 +135,7 @@
     $("editar-cuerpo").innerHTML = `<dl class="ficha-datos">
       ${dato("Local", esc(c.local))}${dato("Canal", esc(c.canal))}${dato("Resultado", chipEstado(estadoDe(c)))}${dato("Atendió", esc(c.atendio || ""))}
       ${c.estado === "compro" ? dato("Vendido", fmtPesos(c.monto_total)) + dato("Fecha de venta", R.util.fechaHora(c.fecha_venta)) + dato("Envío", esc(c.envio || "")) + dato("Forma de pago", esc(c.pago || "")) : ""}
-      ${dato("Cliente", c.cliente_nombre ? `${esc(c.cliente_nombre)} · ${esc(c.cliente_contacto)}` : "")}${dato("Nota", esc(c.nota || ""))}${c.anulada ? dato("Anulada", esc(c.anulada_motivo)) : ""}</dl>
+      ${dato("Cliente", esc([c.cliente_nombre, c.cliente_contacto].filter(Boolean).join(" · ")))}${dato("Nota", esc(c.nota || ""))}${c.anulada ? dato("Anulada", esc(c.anulada_motivo)) : ""}</dl>
       ${its.length ? `<ul class="lista-simple">${its.map(i => `<li><span>${esc(i.rubro || "Sin rubro")}${i.marca ? " · " + esc(i.marca) : ""}${i.descripcion ? `<small>${esc(i.descripcion)}</small>` : ""}</span><span>x${fmtNum(i.cantidad)} · ${fmtPesos(i.monto)}</span></li>`).join("")}</ul>` : ""}
       <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar>Cerrar</button></div>`;
     d.showModal();

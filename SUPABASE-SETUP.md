@@ -64,14 +64,17 @@ El campo "Producto" de la carga busca mientras se escribe en el catálogo de Tie
 
 Si la función no está publicada o falla, el campo avisa y deja elegir "Otro producto": la venta se carga igual con el rubro de la lista, como antes.
 
-## 8. Datos del cliente en "Lo piensa" (migración 3)
+## 8. Datos del cliente en "Lo piensa" (migraciones 3 y 4)
 
-Una consulta que queda en "Lo piensa" tiene que llevar el nombre y apellido del cliente y su teléfono (WhatsApp) o usuario (Instagram), para poder seguirla. La base lo exige; en las demás consultas es opcional. En "Lo piensan" cada tarjeta muestra el contacto con un botón para escribirle por WhatsApp o abrir su Instagram.
+Una consulta que queda en "Lo piensa" tiene que llevar **al menos un dato del cliente**: el nombre, el teléfono (WhatsApp) o el usuario (Instagram), para poder seguirla. Con uno alcanza. La base lo exige; en las demás consultas es opcional. Si se escribe un teléfono o un usuario, la página revisa que se pueda usar (teléfono con al menos 6 números; usuario sin espacios, que se guarda como `@usuario`). En "Lo piensan" cada tarjeta muestra los datos y, si hay teléfono o usuario, un botón para escribirle por WhatsApp o abrir su Instagram.
 
-1. **SQL Editor**: pegar y correr `supabase/migrations/20261113200000_cliente_lo_piensa.sql` **después** de la migración 2 (agrega dos columnas a `consultas`, actualiza `guardar_consulta` y la vista `consultas_vista`; se puede volver a correr).
+1. **SQL Editor**: correr, en este orden y **después** de la migración 2:
+   - `supabase/migrations/20261113200000_cliente_lo_piensa.sql` (agrega las columnas a `consultas`, actualiza `guardar_consulta` y la vista `consultas_vista`).
+   - `supabase/migrations/20261113300000_lo_piensa_un_dato.sql` (cambia la regla a "con un dato alcanza").
+   Las dos se pueden volver a correr.
 2. Subir a Ferozo `index.html`, `css/app.css` y `js/` y recargar con Ctrl+F5.
 
-Hasta correr esta migración, cargar un "Lo piensa" desde la página nueva da error (la base todavía no tiene las columnas).
+Hasta correr la migración 3, cargar un "Lo piensa" desde la página nueva da error (la base todavía no tiene las columnas). Si se corre la 3 y no la 4, la base sigue pidiendo nombre **y** contacto.
 
 ## 9. Crear usuarios desde la página (función `admin-usuarios`)
 

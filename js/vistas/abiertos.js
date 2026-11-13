@@ -35,7 +35,7 @@
       const pasaron = Math.floor((Date.now() - Date.parse(c.fecha_consulta)) / 86400000);
       const quedan = dias - pasaron;
       return `<article class="tarjeta-consulta ${c.estado_efectivo}" data-id="${c.id}">
-        <div class="cab"><span class="cuando">${esc(c.cliente_nombre || "Sin nombre")}</span>${chipEstado(c.estado_efectivo)}</div>
+        <div class="cab"><span class="cuando">${esc(c.cliente_nombre || c.cliente_contacto || "Sin datos del cliente")}</span>${chipEstado(c.estado_efectivo)}</div>
         ${cliente(c)}
         <div class="detalle">Consultó ${esc(hace(c.fecha_consulta))}</div>
         <div class="detalle">${esc(c.canal)}${c.atendio ? " · atendió " + esc(c.atendio) : ""}${nombreLocal(c)}${c.nota ? `<br><strong>${esc(c.nota)}</strong>` : ""}</div>
@@ -103,7 +103,7 @@
       return `<article class="tarjeta-consulta ${c.anulada ? "anulada" : ""}" data-id="${c.id}">
         <div class="cab"><span class="cuando">${esc(hace(c.fecha_consulta))}</span>${chipEstado(estado)}</div>
         <div class="detalle">${esc(c.canal)}${c.atendio ? " · atendió " + esc(c.atendio) : ""}${nombreLocal(c)}</div>
-        ${c.cliente_nombre ? `<div class="detalle"><strong>${esc(c.cliente_nombre)}</strong> · ${esc(c.cliente_contacto)}</div>` : ""}
+        ${c.cliente_nombre || c.cliente_contacto ? `<div class="detalle"><strong>${esc([c.cliente_nombre, c.cliente_contacto].filter(Boolean).join(" · "))}</strong></div>` : ""}
         ${c.estado === "compro" ? `<div class="detalle"><strong>${fmtPesos(c.monto_total)}</strong> · ${esc(V.textoArticulos(its))}<br>${esc(c.envio || "")}${c.pago ? " · " + esc(c.pago) : ""}</div>` : ""}
         ${c.nota ? `<div class="detalle">${esc(c.nota)}</div>` : ""}
         ${c.anulada ? `<div class="detalle">Anulada: ${esc(c.anulada_motivo)}</div>` : ""}

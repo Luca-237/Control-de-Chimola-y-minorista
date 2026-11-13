@@ -196,7 +196,7 @@
         `<button type="button" class="pastilla" data-estado="${k}" aria-pressed="${k === estado}">${t}</button>`).join("")}</div>
       <div id="ed-venta" style="margin-top:14px" ${estado === "compro" ? "" : "hidden"}></div>
       <div class="form-grid">
-        <div><label for="ed-cliente-nombre">Cliente: nombre y apellido <span id="ed-cliente-req">${estado === "lo_piensa" ? "(obligatorio)" : "(opcional)"}</span></label>
+        <div><label for="ed-cliente-nombre">Cliente: nombre <span id="ed-cliente-req">${estado === "lo_piensa" ? "(o teléfono / usuario: al menos uno)" : "(opcional)"}</span></label>
           <input type="text" id="ed-cliente-nombre" maxlength="120" autocapitalize="words" value="${esc(c.cliente_nombre || "")}"></div>
         <div><label for="ed-cliente-contacto" id="ed-cliente-contacto-label">Teléfono o usuario</label>
           <input type="text" id="ed-cliente-contacto" maxlength="80" value="${esc(c.cliente_contacto || "")}"></div>
@@ -214,7 +214,7 @@
       estado = b.dataset.estado;
       $("ed-estados").querySelectorAll("[data-estado]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
       $("ed-venta").hidden = estado !== "compro";
-      $("ed-cliente-req").textContent = estado === "lo_piensa" ? "(obligatorio)" : "(opcional)";
+      $("ed-cliente-req").textContent = estado === "lo_piensa" ? "(o teléfono / usuario: al menos uno)" : "(opcional)";
     });
     $("ed-anular").addEventListener("click", () => { d.close(); anular(c, { alAnular: alGuardar }); });
     $("ed-guardar").addEventListener("click", async () => {
@@ -256,7 +256,7 @@
     catch (e) { R.util.toast(e.message, "error", 6000); }
   }
 
-  // ---------- Datos del cliente (obligatorios en "Lo piensa") ----------
+  // ---------- Datos del cliente (en "Lo piensa" alcanza con uno: nombre, teléfono o usuario) ----------
   // Qué se pide según el canal: teléfono para WhatsApp, usuario para Instagram
   function campoContacto(canal) {
     if (/insta/i.test(canal || "")) return { tipo: "usuario", label: "Usuario de Instagram", placeholder: "@usuario", modo: "text" };
@@ -267,7 +267,9 @@
   function validarCliente(nombre, contacto, canal) {
     nombre = String(nombre || "").replace(/\s+/g, " ").trim();
     contacto = String(contacto || "").trim();
-    if (nombre.split(" ").filter(p => p.length > 1).length < 2) return { ok: false, campo: "nombre", error: "Falta el nombre y apellido del cliente." };
+    if (!nombre && !contacto) return { ok: false, campo: "nombre", error: "Completá al menos un dato del cliente: nombre, teléfono o usuario." };
+    if (!contacto) return { ok: true, nombre, contacto: "" };   // con el nombre alcanza
+    // Si escribieron teléfono o usuario, se revisa que se pueda usar para escribirle
     const tipo = campoContacto(canal).tipo;
     const digitos = contacto.replace(/\D/g, "");
     if (tipo === "usuario" || (tipo === "otro" && /^@|[a-z_]/i.test(contacto))) {
@@ -275,7 +277,7 @@
       if (!/^[a-z0-9._]{2,30}$/i.test(u)) return { ok: false, campo: "contacto", error: "Revisá el usuario de Instagram: solo letras, números, puntos y guiones bajos." };
       return { ok: true, nombre, contacto: "@" + u.toLowerCase() };
     }
-    if (digitos.length < 8) return { ok: false, campo: "contacto", error: "Revisá el teléfono: tiene que tener la característica y el número." };
+    if (digitos.length < 6) return { ok: false, campo: "contacto", error: "Revisá el teléfono: tiene muy pocos números (o borralo y dejá solo el nombre)." };
     return { ok: true, nombre, contacto };
   }
   // Enlace para escribirle (WhatsApp o Instagram), o null

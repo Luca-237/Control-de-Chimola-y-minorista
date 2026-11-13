@@ -167,17 +167,24 @@ test('fechas: nada futuro y hasta 7 días atrás para el local', async () => {
   assert.ok(id > 0);
 });
 
-test('"Lo piensa" exige nombre completo y teléfono o usuario; quedan guardados al cerrarla', async () => {
+test('"Lo piensa" pide al menos un dato del cliente (nombre, teléfono o usuario); quedan guardados al cerrarla', async () => {
   const base = { local_id: L['Cindy Minorista'], canal_id: cm().canal.Instagram, estado: 'lo_piensa' };
-  await assert.rejects(guardar(U.cindy, base), /nombre completo y el teléfono o usuario/);
-  await assert.rejects(guardar(U.cindy, { ...base, cliente_nombre: 'Ana Pérez', cliente_contacto: '  ' }), /nombre completo/);
+  await assert.rejects(guardar(U.cindy, base), /falta un dato del cliente/);
+  await assert.rejects(guardar(U.cindy, { ...base, cliente_nombre: '  ', cliente_contacto: ' ' }), /falta un dato del cliente/);
+  // Con uno solo alcanza
+  const soloUsuario = await guardar(U.cindy, { ...base, cliente_contacto: '@solo.usuario' });
+  assert.equal((await fila(soloUsuario)).cliente_nombre, '');
+  const soloNombre = await guardar(U.cindy, { ...base, cliente_nombre: 'Solo Nombre' });
+  assert.equal((await fila(soloNombre)).cliente_contacto, '');
   const id = await guardar(U.cindy, { ...base, cliente_nombre: '  Ana Pérez ', cliente_contacto: '@ana.perez' });
   const v = (await como(U.cindy, 'select cliente_nombre, cliente_contacto from public.consultas_vista where id = $1', [id]))[0];
   assert.deepEqual(v, { cliente_nombre: 'Ana Pérez', cliente_contacto: '@ana.perez' });
   // Corregir sin mandar los datos del cliente no los borra; pasarla a "lo piensa" sin datos no se puede
   await guardar(U.cindy, { id, estado: 'lo_piensa', nota: 'vuelve el sábado' });
   assert.equal((await fila(id)).cliente_nombre, 'Ana Pérez');
-  await assert.rejects(guardar(U.cindy, { id, estado: 'lo_piensa', cliente_contacto: '' }), /nombre completo/);
+  await guardar(U.cindy, { id, estado: 'lo_piensa', cliente_contacto: '' });   // queda el nombre: alcanza
+  await assert.rejects(guardar(U.cindy, { id, estado: 'lo_piensa', cliente_nombre: '', cliente_contacto: '' }), /falta un dato del cliente/);
+  await guardar(U.cindy, { id, estado: 'lo_piensa', cliente_contacto: '@ana.perez' });
   await cerrar(U.cindy, id, { estado: 'no_compro' });
   assert.equal((await fila(id)).cliente_contacto, '@ana.perez');
   // En las otras consultas el cliente es opcional

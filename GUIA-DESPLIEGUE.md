@@ -29,6 +29,7 @@ Antes de publicar, en Supabase tiene que estar todo lo que la página usa (detal
   1. `20261112100000_esquema_inicial.sql` (hecha el 12/11)
   2. `20261113100000_producto_catalogo.sql` (buscador de productos)
   3. `20261113200000_cliente_lo_piensa.sql` (datos del cliente en "Lo piensa")
+  4. `20261113300000_lo_piensa_un_dato.sql` (en "Lo piensa" alcanza con un dato: nombre, teléfono o usuario)
 - **Edge Functions** publicadas, las dos con **"Verify JWT" apagado**:
   - `admin-usuarios` (crear usuarios, contraseñas, habilitar).
   - `buscar-productos`, con los secretos `TIENDANUBE_STORE_ID` y `TIENDANUBE_TOKEN` cargados.
