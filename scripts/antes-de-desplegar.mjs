@@ -45,7 +45,7 @@ const publicos = ['index.html', 'robots.txt', ...fs.readdirSync(path.join(RAIZ, 
 const recorrer = d => fs.readdirSync(path.join(RAIZ, d), { withFileTypes: true })
   .flatMap(e => e.isDirectory() ? recorrer(path.join(d, e.name)) : [path.join(d, e.name).replace(/\\/g, '/')]);
 publicos.push(...recorrer('js'));
-const SECRETOS = [/sb_secret_[\w-]+/, /service_role/i, /eyJhbGciOi[\w-]{20,}\.[\w-]{20,}/, /TIENDANUBE_TOKEN\s*[:=]\s*["'][^"']+/, /ghp_[A-Za-z0-9]{20,}|github_pat_\w{20,}/];
+const SECRETOS = [/sb_secret_[\w-]+/, /service_role/i, /eyJhbGciOi[\w-]{20,}\.[\w-]{20,}/, /TIENDANUBE_TOKEN\s*[:=]\s*["'][^"']+/, /ODOO_API_KEY\s*[:=]\s*["'][^"']+/, /bearer\s+[0-9a-f]{40}/i, /["'][0-9a-f]{40}["']/, /ghp_[A-Za-z0-9]{20,}|github_pat_\w{20,}/];
 for (const f of publicos) {
   const t = leer(f);
   for (const re of SECRETOS) if (re.test(t)) errores.push(`${f} parece tener un secreto (${re.source.slice(0, 20)}…): no se puede publicar`);

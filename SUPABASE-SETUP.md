@@ -55,11 +55,11 @@ En **Project Settings → API Keys** copiar la **Project URL** y la clave **publ
 
 ## 7. Buscador de productos (migración 2 y función `buscar-productos`)
 
-El campo "Producto" de la carga busca mientras se escribe en el catálogo de Tiendanube (un resultado por nombre y categoría) y guarda el producto y su categoría en cada artículo vendido. De ahí salen "Categorías más vendidas" y "Productos más vendidos" del tablero.
+El campo "Producto" de la carga busca mientras se escribe en los productos de **Odoo** (todos los activos que se venden, con o sin stock; un resultado por nombre y categoría, con el stock sumado y un código de ejemplo) y guarda el producto y su categoría en cada artículo vendido. De ahí salen "Categorías más vendidas" y "Productos más vendidos" del tablero. Si un producto no está, la última opción de la lista, **"Cargar este producto tal como está"**, lo guarda con el nombre exactamente como se escribió (sin pedir rubro). Eso necesita la **migración 5** (`supabase/migrations/20261116100000_producto_libre_sin_rubro.sql`, después de la 2): sin ella la base sigue pidiendo un rubro para los productos fuera del catálogo.
 
 1. **SQL Editor**: pegar y correr `supabase/migrations/20261113100000_producto_catalogo.sql` (agrega columnas a `venta_items` y actualiza las funciones de carga y la vista; se puede volver a correr).
 2. **Edge Functions → Deploy a new function**: nombre `buscar-productos`, contenido de `supabase/functions/buscar-productos/index.ts`. **Apagar "Verify JWT"** (la función verifica la sesión por su cuenta).
-3. **Edge Functions → Secrets**: cargar `TIENDANUBE_STORE_ID` (el número de la tienda) y `TIENDANUBE_TOKEN` (la clave "a medida" de solo lectura con el permiso *Leer productos*; la pega una persona, no va en el código ni en el repo).
+3. **Edge Functions → Secrets**: cargar `ODOO_API_KEY` con la clave de **solo consulta** de Odoo (la pega una persona en Supabase; no va en el código, en el repo, en el vault ni en el chat). Opcional: `ODOO_URL` si la base no es `https://cindymayorista.odoo.com`. Las claves de Odoo vencen (como mucho a los 3 meses): cuando venza, el buscador avisa "Odoo rechazó la clave" y hay que generar otra y reemplazar el secreto. Los secretos viejos de Tiendanube (`TIENDANUBE_STORE_ID`, `TIENDANUBE_TOKEN`) ya no se usan y se pueden borrar.
 4. Subir a Ferozo `index.html`, `css/app.css`, `js/` completo (hay archivos nuevos: `js/buscador-producto.js`) y recargar con Ctrl+F5.
 
 Si la función no está publicada o falla, el campo avisa y deja elegir "Otro producto": la venta se carga igual con el rubro de la lista, como antes.

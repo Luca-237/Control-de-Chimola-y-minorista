@@ -30,9 +30,10 @@ Antes de publicar, en Supabase tiene que estar todo lo que la página usa (detal
   2. `20261113100000_producto_catalogo.sql` (buscador de productos)
   3. `20261113200000_cliente_lo_piensa.sql` (datos del cliente en "Lo piensa")
   4. `20261113300000_lo_piensa_un_dato.sql` (en "Lo piensa" alcanza con un dato: nombre, teléfono o usuario)
+  5. `20261116100000_producto_libre_sin_rubro.sql` (un producto fuera del catálogo se guarda tal como se escribió, sin rubro)
 - **Edge Functions** publicadas, las dos con **"Verify JWT" apagado**:
   - `admin-usuarios` (crear usuarios, contraseñas, habilitar).
-  - `buscar-productos`, con los secretos `TIENDANUBE_STORE_ID` y `TIENDANUBE_TOKEN` cargados.
+  - `buscar-productos` (busca en Odoo), con el secreto `ODOO_API_KEY` cargado (clave de solo consulta de Odoo).
 - **Authentication → Sign In / Providers:** Email prendido, "Allow new users to sign up" **apagado**.
 - Tu usuario admin habilitado.
 

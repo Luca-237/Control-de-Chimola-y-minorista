@@ -111,7 +111,7 @@ test('una venta incompleta se rechaza', async () => {
   await assert.rejects(guardar(U.cindy, ventaCindy({ pago_id: null })), /forma de pago/);
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ rubro_id: cm().rubro.Mochilas, cantidad: 1.5, monto: 10 }] })), /entero/);
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ rubro_id: cm().rubro.Mochilas, cantidad: 1, monto: -1 }] })), /monto/);
-  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ cantidad: 1, monto: 10 }] })), /rubro/);
+  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ cantidad: 1, monto: 10 }] })), /Falta el nombre del producto/);   // ni producto, ni nombre, ni rubro
   await assert.rejects(guardar(U.cindy, { local_id: L['Cindy Minorista'], estado: 'no_compro' }), /canal/);
   await assert.rejects(guardar(U.cindy, { local_id: L['Cindy Minorista'], canal_id: cm().canal.WhatsApp, estado: 'tal vez' }), /Estado no válido/);
 });
@@ -270,10 +270,17 @@ test('catálogo: un artículo del buscador no necesita rubro ni marca y guarda p
   assert.equal(Number((await fila(id)).monto_total), 79000);
 });
 
-test('catálogo: sin producto o sin categoría se rechaza; el texto libre sigue pidiendo rubro', async () => {
+test('catálogo: sin producto o sin categoría se rechaza; fuera del catálogo alcanza con el nombre tal como se escribió', async () => {
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ producto: '  ' })] })), /Falta el producto/);
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ categoria: '' })] })), /Falta la categoría/);
-  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, cantidad: 1, monto: 10 }] })), /rubro/);
+  // sin nombre y sin rubro no se puede
+  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, descripcion: '  ', cantidad: 1, monto: 10 }] })), /Falta el nombre del producto/);
+  // con el nombre solo, sin rubro, sí
+  const id = await guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, descripcion: 'Paraguas transparente con luces', cantidad: 2, monto: 30000 }] }));
+  const it = (await como(U.cindy, 'select descripcion, rubro_id, catalogo from public.venta_items_vista where consulta_id = $1', [id]))[0];
+  assert.deepEqual(it, { descripcion: 'Paraguas transparente con luces', rubro_id: null, catalogo: false });
+  // los de antes (con rubro y sin nombre) siguen valiendo
+  await guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, rubro_id: cm().rubro.Mochilas, cantidad: 1, monto: 10 }] }));
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ cantidad: 0 })] })), /entero mayor a cero/);
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ monto: -5 })] })), /monto/);
 });

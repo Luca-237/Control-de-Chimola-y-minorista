@@ -1,9 +1,10 @@
 // =====================================================================
 //  Buscador de productos "mientras se escribe" (autocompletar).
-//  Escribís parte del nombre y aparece la lista de productos de la tienda
-//  (uno por nombre y categoría, ver la función buscar-productos). Se elige
-//  con el mouse, el dedo o las flechas + Enter. Si el producto no está,
-//  "Otro producto" deja cargarlo con el rubro de la lista de siempre.
+//  Escribís parte del nombre (o el código) y aparece la lista de productos de
+//  Odoo, con o sin stock (uno por nombre y categoría, ver la función
+//  buscar-productos). Se elige con el mouse, el dedo o las flechas + Enter.
+//  Si el producto no está, "Cargar «…» igual" lo deja cargar con el nombre
+//  escrito y el rubro de la lista de siempre.
 //  Cuida el límite de pedidos de la API: espera 250 ms después de la última
 //  tecla, busca desde 2 letras, cancela la búsqueda anterior y recuerda lo
 //  ya buscado.
@@ -56,7 +57,7 @@
   // cont: donde se dibuja. opciones:
   //   inicial   { modo: 'catalogo' | 'libre' | null, producto, categoria, categoria_ruta }  lo ya elegido
   //   alElegir  (resultado)  se eligió un producto de la lista
-  //   alLibre   ()           se eligió "Otro producto"
+  //   alLibre   (texto)      se eligió cargarlo fuera del catálogo (texto = lo que se había escrito)
   //   alCambiar ()           se tocó "Cambiar" (vuelve a buscar)
   function crear(cont, { inicial = {}, alElegir, alLibre, alCambiar } = {}) {
     const id = 'bp' + (++contador);
@@ -82,7 +83,7 @@
       if (modo === 'catalogo') {
         elegidoEl.innerHTML = `<span class="bp-ico">${ICONOS.compro}</span><span class="bp-texto"><strong>${esc(inicial.producto)}</strong><small>${esc(inicial.categoria_ruta || inicial.categoria || '')}</small></span><button type="button" class="link" data-cambiar>Cambiar</button>`;
       } else if (modo === 'libre') {
-        elegidoEl.innerHTML = `<span class="bp-texto"><strong>Otro producto</strong><small>No está en la lista: se carga con el rubro</small></span><button type="button" class="link" data-cambiar>Cambiar</button>`;
+        elegidoEl.innerHTML = `<span class="bp-texto"><strong>Tal como está (fuera del catálogo)</strong><small>Se guarda con el nombre de abajo</small></span><button type="button" class="link" data-cambiar>Buscar en el catálogo</button>`;
       }
     }
 
@@ -96,12 +97,12 @@
     function pintarLista() {
       const q = input.value.trim();
       const opciones = resultados.map((r, i) => `<li role="option" id="${id}-o${i}" data-i="${i}" aria-selected="${i === activo}">
-          <span class="bp-nombre">${resaltado(r.nombre, q)}${r.publicado ? '' : ' <em class="bp-sin">Sin publicar</em>'}</span>
-          <small>${esc(r.ruta || r.categoria || '')}</small></li>`).join('');
+          <span class="bp-nombre">${resaltado(r.nombre, q)}${r.con_stock === false ? ' <em class="bp-sin">Sin stock</em>' : r.publicado === false ? ' <em class="bp-sin">Sin publicar</em>' : ''}</span>
+          <small>${esc([r.ruta || r.categoria || '', (r.codigos || []).length ? 'cód. ' + r.codigos[0] + (r.cantidad > 1 ? ` y ${r.cantidad - 1} más` : '') : '', typeof r.stock === 'number' && r.stock > 0 ? 'stock ' + R.util.fmtNum(r.stock) : ''].filter(Boolean).join(' · '))}</small></li>`).join('');
       const aviso = error ? `<li class="bp-aviso" role="presentation">${esc(error)}</li>`
-        : !resultados.length && q.length >= MIN_LETRAS && ultimaBusqueda === q ? `<li class="bp-aviso" role="presentation">No encontramos "${esc(q)}" en el catálogo.</li>` : '';
+        : !resultados.length && q.length >= MIN_LETRAS && ultimaBusqueda === q ? `<li class="bp-aviso" role="presentation">No encontramos "${esc(q)}" en Odoo.</li>` : '';
       lista.innerHTML = opciones + aviso
-        + `<li role="option" id="${id}-libre" data-libre aria-selected="${activo === resultados.length}" class="bp-libre"><span class="bp-nombre">Otro producto (no está en la lista)</span><small>Se carga con el rubro de siempre</small></li>`;
+        + `<li role="option" id="${id}-libre" data-libre aria-selected="${activo === resultados.length}" class="bp-libre"><span class="bp-nombre">Cargar este producto tal como está: <strong>${esc(q)}</strong></span><small>No está en el catálogo: se guarda con ese nombre</small></li>`;
       lista.hidden = false;
       input.setAttribute('aria-expanded', 'true');
       const act = activo >= 0 ? lista.querySelector(`[aria-selected="true"]`) : null;
@@ -139,7 +140,7 @@
     }
 
     function elegir(i) {
-      if (i === resultados.length) return libre();
+      if (i === resultados.length) { if (input.value.trim()) libre(); return; }
       const r = resultados[i];
       if (!r) return;
       clearTimeout(temporizador);
@@ -151,9 +152,10 @@
     function libre() {
       clearTimeout(temporizador);
       cerrar();
+      const texto = input.value.trim().replace(/\s+/g, ' ');
       Object.assign(inicial, { modo: 'libre' });
       pintarElegido();
-      if (alLibre) alLibre();
+      if (alLibre) alLibre(texto);
     }
 
     input.addEventListener('input', alEscribir);

@@ -31,7 +31,7 @@
   // ---------- Formulario de venta ----------
   // venta: { items: [...], envio_id, pago_id }. Cada artículo es de uno de dos tipos (it.modo):
   //   "catalogo" -> producto elegido en el buscador: { producto, producto_clave, categoria, categoria_ruta, categoria_tn_id }
-  //   "libre"    -> "Otro producto" (no está en la lista): lleva el rubro (y la marca) de las listas del local
+  //   "libre"    -> "tal como está", fuera del catálogo: el nombre escrito (en descripcion); rubro y marca opcionales
   //   null       -> todavía sin elegir
   // y además { descripcion, cantidad, monto }.
   function crear(cont, localId, venta = {}) {
@@ -45,15 +45,18 @@
       const ms = opcionesDe(localId, "marca", it.marca_id);
       const unaMarca = ms.length === 1;
       if (libre && unaMarca && !it.marca_id) it.marca_id = ms[0].id;
-      const marca = libre && !unaMarca ? `<div class="campo" data-campo="marca"><label>Marca</label>
+      const marca = libre && !unaMarca ? `<div class="campo" data-campo="marca"><label>Marca (opcional)</label>
             <select data-marca><option value="">Elegir…</option>${ms.map(m => `<option value="${m.id}" ${m.id === it.marca_id ? "selected" : ""}>${esc(m.valor)}</option>`).join("")}</select></div>` : "";
       return `<div class="articulo" data-i="${i}">
         <div class="articulo-cab"><span>Artículo ${i + 1}</span>${items.length > 1 ? `<button type="button" class="btn-quitar" data-quitar="${i}" title="Quitar este artículo" aria-label="Quitar este artículo">${ICONOS.basura}</button>` : ""}</div>
         <div class="campo" data-campo="producto"><label>Producto</label><div data-buscador></div></div>
-        ${libre ? `<div class="campo" data-campo="rubro"><label>Rubro</label>${pastillas(opcionesDe(localId, "rubro", it.rubro_id), it.rubro_id, "rubro")}</div>` : ""}
+
         <div class="articulo-fila">
-          <div>${marca}<label>Detalle (opcional)</label>
-            <input type="text" data-desc maxlength="120" placeholder="Ej. color, modelo" value="${esc(it.descripcion || "")}"></div>
+          <div>${marca}${libre
+            ? `<div class="campo" data-campo="nombre-libre"><label>Nombre del producto</label>
+            <input type="text" data-desc maxlength="120" placeholder="Ej. Mochila escolar azul con ruedas" value="${esc(it.descripcion || "")}"></div>`
+            : `<label>Detalle (opcional)</label>
+            <input type="text" data-desc maxlength="120" placeholder="Ej. color, modelo" value="${esc(it.descripcion || "")}">`}</div>
           <div><label>Cantidad</label><div class="cantidad"><button type="button" data-menos aria-label="Una menos">−</button>
             <input type="number" inputmode="numeric" min="1" step="1" data-cant value="${it.cantidad || 1}" aria-label="Cantidad"><button type="button" data-mas aria-label="Una más">+</button></div></div>
           <div class="campo" data-campo="monto"><label>Monto total del artículo</label><div class="monto-wrap"><input type="text" inputmode="decimal" data-monto placeholder="0" value="${it.monto != null ? esc(R.util.fmtNum(it.monto, 2)) : ""}" aria-label="Monto"></div></div>
@@ -81,7 +84,14 @@
         R.buscadorProducto.crear(a.querySelector("[data-buscador]"), {
           inicial: it,
           alElegir: () => { it.rubro_id = null; it.marca_id = null; redibujar(i, "[data-cant]"); },
-          alLibre: () => redibujar(i, ".pastilla"),
+          // Lo que se había escrito en el buscador queda como nombre del producto
+          // (se lee la pantalla antes, si no el campo vacío de "Detalle" pisaría el nombre)
+          alLibre: texto => {
+            leerPantalla();
+            if (texto && !it.descripcion) it.descripcion = texto;
+            dibujar();
+            cont.querySelector(`.articulo[data-i="${i}"] ${it.descripcion ? "[data-cant]" : "[data-desc]"}`)?.focus();
+          },
           alCambiar: () => redibujar(i, ".bp-input"),
         });
       });
@@ -93,7 +103,7 @@
       cont.querySelectorAll(".articulo").forEach(a => {
         const it = items[Number(a.dataset.i)];
         const rb = a.querySelector('[data-rubro][aria-pressed="true"]');
-        if (it.modo === "libre") it.rubro_id = rb ? Number(rb.dataset.rubro) : null;
+        if (it.modo === "libre" && a.querySelector("[data-rubro]")) it.rubro_id = rb ? Number(rb.dataset.rubro) : null;   // si no hay pastillas de rubro, se conserva el que tuviera
         const ms = a.querySelector("[data-marca]");
         if (ms) it.marca_id = ms.value ? Number(ms.value) : null;
         it.descripcion = a.querySelector("[data-desc]").value.trim();
@@ -126,6 +136,7 @@
     grupoUnico(cont, "pago");
     cont.addEventListener("input", e => {
       if (e.target.matches("[data-monto]")) { pintarTotal(); e.target.closest(".campo-error")?.classList.remove("campo-error"); }
+      if (e.target.matches("[data-desc]")) e.target.closest(".campo-error")?.classList.remove("campo-error");
     });
     cont.addEventListener("change", e => {
       if (e.target.matches("[data-marca]")) e.target.closest(".campo-error")?.classList.remove("campo-error");
@@ -149,11 +160,8 @@
         cont.querySelectorAll(".articulo").forEach(a => {
           const it = items[Number(a.dataset.i)], n = Number(a.dataset.i) + 1;
           if (!it.modo) marcar(a.querySelector('[data-campo="producto"]'), `el producto del artículo ${n}`);
-          if (it.modo === "libre") {
-            if (!it.rubro_id) marcar(a.querySelector('[data-campo="rubro"]'), `el rubro del artículo ${n}`);
-            const cm = a.querySelector('[data-campo="marca"]');
-            if (cm && !it.marca_id && marcas().length > 1) marcar(cm, `la marca del artículo ${n}`);
-          }
+          // Tal como está (fuera del catálogo): alcanza con el nombre; sin rubro ni marca obligatorios
+          if (it.modo === "libre" && !it.descripcion) marcar(a.querySelector('[data-campo="nombre-libre"]'), `el nombre del producto del artículo ${n}`);
           if (!(it.cantidad >= 1) || it.cantidad % 1) faltan.push(`una cantidad válida en el artículo ${n}`);
           if (it.monto == null || it.monto < 0) marcar(a.querySelector('[data-campo="monto"]'), `el monto del artículo ${n}`);
         });
@@ -305,7 +313,9 @@
   function textoArticulos(its) {
     return its.map(i => i.producto
       ? `${i.producto}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`
-      : `${i.rubro || "Sin rubro"}${i.marca ? " " + i.marca : ""}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`).join(" · ");
+      : i.catalogo === false && i.descripcion
+        ? `${i.descripcion} (${[i.rubro, i.marca, "fuera del catálogo"].filter(Boolean).join(", ")}) x${i.cantidad}`
+        : `${i.rubro || "Sin rubro"}${i.marca ? " " + i.marca : ""}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`).join(" · ");
   }
 
   R.venta = { opcionesDe, pastillas, grupoUnico, elegido, crear, editar, anular, textoArticulos, iconoCanal,

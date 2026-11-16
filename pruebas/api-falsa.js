@@ -73,7 +73,9 @@
   const resultadoCatalogo = c => {
     const partes = c[1].split(" > ");
     return { clave: c[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim() + "|" + (1000 + CATALOGO.indexOf(c)),
-      nombre: c[0].toUpperCase(), categoria: partes[partes.length - 1], ruta: c[1], categoria_id: 1000 + CATALOGO.indexOf(c), cantidad: c[3], publicado: c[2], imagen: "" };
+      nombre: c[0].toUpperCase(), categoria: partes[partes.length - 1], ruta: c[1], categoria_id: 1000 + CATALOGO.indexOf(c), cantidad: c[3], imagen: "",
+      // Como Odoo: códigos de ejemplo y stock (los "no publicados" de antes hacen de "sin stock")
+      codigos: [String(317000 + CATALOGO.indexOf(c) * 7)], stock: c[2] ? 3 + (CATALOGO.indexOf(c) * 13) % 90 : 0, con_stock: !!c[2], publicado: true };
   };
 
   // ---------- Consultas inventadas ----------
@@ -102,7 +104,7 @@
       const base = montoRubro[rubro.valor] || 20000;
       const monto = Math.round((base * (.6 + azar() * .9) * cantidad) / 500) * 500 - (azar() < .4 ? 1 : 0);
       total += monto;
-      items.push({ id: idI++, consulta_id: c.id, catalogo: false, producto: "", producto_clave: "", categoria: "", categoria_ruta: "", categoria_tn_id: null, rubro_id: rubro.id, marca_id: elegir(marcas).id, descripcion: azar() < .2 ? elegir(["negra", "rosa", "con ruedas", "grande", "oferta"]) : "", cantidad, monto });
+      items.push({ id: idI++, consulta_id: c.id, catalogo: false, producto: "", producto_clave: "", categoria: "", categoria_ruta: "", categoria_tn_id: null, rubro_id: rubro.id, marca_id: elegir(marcas).id, descripcion: "", cantidad, monto });
     }
     Object.assign(c, { estado: "compro", fecha_venta: cuando, envio_id: pesado(de(c.local_id, "envio").map((o, i) => [o.id, i === 0 ? 10 : 1.5])),
       pago_id: pesado(de(c.local_id, "pago").map(o => [o.id, { "Tarjeta de crédito": 5, QR: 3, Efectivo: 3, Transferencia: 3 }[o.valor] || 1])), monto_total: total });
@@ -172,7 +174,7 @@
       if (it.catalogo) {
         if (!String(it.producto || "").trim()) throw new Error("Falta el producto de un artículo");
         if (!String(it.categoria || "").trim()) throw new Error("Falta la categoría del producto de un artículo");
-      } else if (!it.rubro_id) throw new Error("Falta el rubro de un artículo");
+      } else if (!it.rubro_id && !String(it.descripcion || "").trim()) throw new Error("Falta el nombre del producto de un artículo");
       if (!(it.cantidad >= 1) || it.cantidad % 1) throw new Error("La cantidad tiene que ser un número entero mayor a cero");
       if (it.monto == null || it.monto < 0) throw new Error("Falta el monto de un artículo o es negativo");
     }

@@ -825,3 +825,4 @@ a.web-chip:hover { text-decoration:underline; }
 .calor .celda:hover { outline:2px solid var(--negro); outline-offset:-1px; }
 .graf-svg .zona:hover { fill:var(--hover); opacity:.9; }
 .graf-svg .linea, .graf-svg .area, .graf-svg circle, .graf-svg .eje, .graf-svg .eje-txt { pointer-events:none; }
+.bp-fuera { display:inline-block; margin-top:6px; font-size:12.5px; }

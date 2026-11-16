@@ -163,15 +163,20 @@
     }
     return [...m.values()].map(g => ({ ...g, ventas: g.ventas.size })).sort((a, b) => b.monto - a.monto || b.unidades - a.unidades);
   }
-  // Productos más vendidos: solo los elegidos en el buscador (el mismo nombre y categoría es un solo producto).
-  // Devuelve { productos: [...], sinProducto: unidades de artículos sin producto del catálogo }
+  // Productos más vendidos: los elegidos en el buscador (el mismo nombre y categoría es un solo producto) y los
+  // cargados fuera del catálogo con su nombre (catalogo = false + descripcion), marcados como tales.
+  // Devuelve { productos: [...], sinProducto: unidades de artículos sin nombre de producto }
+  const normProd = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   function productosTop(items, orden = 'unidades') {
     const m = new Map();
     let sinProducto = 0;
     for (const i of items) {
-      if (!i.producto) { sinProducto += Number(i.cantidad) || 0; continue; }
-      const k = i.producto_clave || i.producto;
-      const g = m.get(k) || { nombre: i.producto, categoria: i.categoria || '', ruta: i.categoria_ruta || '', unidades: 0, monto: 0, ventas: new Set() };
+      const libre = !i.producto && i.catalogo === false && String(i.descripcion || '').trim();
+      if (!i.producto && !libre) { sinProducto += Number(i.cantidad) || 0; continue; }
+      const k = i.producto ? (i.producto_clave || i.producto) : 'libre|' + normProd(i.descripcion) + '|' + (i.rubro || '');
+      const g = m.get(k) || (i.producto
+        ? { nombre: i.producto, categoria: i.categoria || '', ruta: i.categoria_ruta || '', unidades: 0, monto: 0, ventas: new Set() }
+        : { nombre: String(i.descripcion).trim(), categoria: (i.rubro ? i.rubro + ' · ' : '') + 'fuera del catálogo', ruta: '', libre: true, unidades: 0, monto: 0, ventas: new Set() });
       g.unidades += Number(i.cantidad) || 0; g.monto += Number(i.monto) || 0; g.ventas.add(i.consulta_id);
       m.set(k, g);
     }

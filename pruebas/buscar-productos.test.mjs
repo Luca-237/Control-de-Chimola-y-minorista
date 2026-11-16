@@ -1,17 +1,14 @@
-// Pruebas del buscador de productos (función buscar-productos). Sin internet: respuestas armadas con la misma
-// forma que la API de Tiendanube. Con PROBAR_TN=<archivo .env con la clave> además consulta la API real.
+// Pruebas del buscador de productos (función buscar-productos, contra Odoo). Sin internet: respuestas armadas
+// con la misma forma que la API JSON-2 de Odoo 19. Con la variable de entorno ODOO_PRUEBA_CLAVE (una clave de
+// solo consulta; nunca se guarda en un archivo) además consulta Odoo de verdad.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizar, categoriaHoja, agrupar, pedirPagina, buscarProductos } from '../supabase/functions/buscar-productos/index.ts';
+import { normalizar, palabras, dominio, agrupar, consultarOdoo, buscarProductos, CAMPOS } from '../supabase/functions/buscar-productos/index.ts';
 
-const MARRO = { id: 1, name: { es: 'Marroquinería' }, parent: null };
-const MOCHILAS = { id: 2, name: { es: 'Mochilas' }, parent: 1 };
-const INFANTILES = { id: 3, name: { es: 'Infantiles' }, parent: 2 };
-const URBANAS = { id: 4, name: { es: 'Urbanas' }, parent: 2 };
-const ESCOLAR = { id: 5, name: { es: 'Escolar' }, parent: null };
-const CARTUCHERAS = { id: 6, name: { es: 'Cartucheras' }, parent: 5 };
 let n = 0;
-const prod = (nombre, cats, extra = {}) => ({ id: ++n, name: { es: nombre }, published: true, categories: cats, images: [{ src: `https://dcdn-us.mitiendanube.com/stores/1/products/${n}.jpg`, position: 1 }], ...extra });
+const prod = (nombre, categoria, extra = {}) => ({ id: ++n, name: nombre, default_code: String(300000 + n), categ_id: categoria ? [categoria[0], categoria[1]] : false, qty_available: 1, ...extra });
+const MOCHILAS = [10, 'Mochilas'], CARTERAS = [15, 'Carteras'];
+const cfg = { url: 'https://odoo.prueba/', clave: 'clave-de-prueba' };
 
 test('normaliza: mayúsculas, tildes, espacios y signos no cuentan', () => {
   assert.equal(normalizar('  Mochila   NBA  Lakers '), 'mochila nba lakers');
@@ -19,114 +16,91 @@ test('normaliza: mayúsculas, tildes, espacios y signos no cuentan', () => {
   assert.equal(normalizar(null), '');
 });
 
-test('categoría: la más profunda y su ruta completa', () => {
-  const h = categoriaHoja(prod('X', [MARRO, MOCHILAS, INFANTILES]));
-  assert.deepEqual(h, { id: 3, nombre: 'Infantiles', ruta: 'Marroquinería > Mochilas > Infantiles' });
-  assert.deepEqual(categoriaHoja(prod('X', [])), { id: null, nombre: 'Sin categoría', ruta: 'Sin categoría' });
-  // dos ramas: gana la más profunda; si empatan, la primera
-  assert.equal(categoriaHoja(prod('X', [ESCOLAR, CARTUCHERAS, MARRO, MOCHILAS, URBANAS])).nombre, 'Urbanas');
-  assert.equal(categoriaHoja(prod('X', [MARRO, MOCHILAS, INFANTILES, URBANAS])).nombre, 'Infantiles');
-  // un padre que no viene en la lista no rompe nada
-  assert.equal(categoriaHoja(prod('X', [{ id: 9, name: { es: 'Suelta' }, parent: 777 }])).ruta, 'Suelta');
+test('palabras y filtro de Odoo: cada palabra en el nombre o el código, solo lo que se vende', () => {
+  assert.deepEqual(palabras(' trendy  mochila trendy x '), ['trendy', 'mochila']);
+  assert.deepEqual(palabras('50%_off'), ['50', 'off']);   // los comodines de Odoo no pasan
+  assert.deepEqual(dominio('mochila trendy'), [['sale_ok', '=', true],
+    '|', ['name', 'ilike', 'mochila'], ['default_code', 'ilike', 'mochila'],
+    '|', ['name', 'ilike', 'trendy'], ['default_code', 'ilike', 'trendy']]);
+  assert.deepEqual(dominio('mochila tren', true).at(-1), ['name', '=ilike', 'mochila%tren%']);
 });
 
-test('junta los repetidos: el mismo nombre en la misma categoría es un solo resultado', () => {
+test('junta los repetidos: mismo nombre y categoría es un resultado, con el stock sumado', () => {
   const r = agrupar([
-    prod('CARTUCHERA TRENDY', [ESCOLAR, CARTUCHERAS]), prod('Cartuchera  Trendy', [ESCOLAR, CARTUCHERAS]), prod('cartuchera trendy', [ESCOLAR, CARTUCHERAS], { published: false }),
-  ], 'cartuch');
-  assert.equal(r.length, 1);
-  assert.equal(r[0].cantidad, 3);
-  assert.equal(r[0].nombre, 'CARTUCHERA TRENDY'); // se muestra el primero
-  assert.equal(r[0].categoria, 'Cartucheras');
-  assert.equal(r[0].ruta, 'Escolar > Cartucheras');
-  assert.equal(r[0].publicado, true);
-  assert.match(r[0].imagen, /\.jpg$/);
-});
-
-test('el mismo nombre en categorías distintas sale por separado', () => {
-  const r = agrupar([prod('Mochila Trendy', [MARRO, MOCHILAS, URBANAS]), prod('Mochila Trendy', [MARRO, MOCHILAS, INFANTILES])], 'mochila');
-  assert.equal(r.length, 2);
-  assert.deepEqual(r.map((x) => x.categoria).sort(), ['Infantiles', 'Urbanas']);
-  assert.notEqual(r[0].clave, r[1].clave);
-});
-
-test('incluye los no publicados y los marca; sin publicar solo si ninguno está publicado', () => {
-  const r = agrupar([prod('Mochila Vieja', [MARRO, MOCHILAS], { published: false })], 'mochila');
-  assert.equal(r.length, 1);
-  assert.equal(r[0].publicado, false);
-});
-
-test('orden: primero los que empiezan con lo escrito, después los publicados, después la relevancia de la API', () => {
-  const r = agrupar([
-    prod('Funda de mochila', [MARRO]),                           // contiene, publicada
-    prod('Mochila sin publicar', [MARRO], { published: false }),  // empieza, sin publicar
-    prod('Mochila publicada', [MARRO]),                          // empieza, publicada
-    prod('Otra mochila', [MARRO]),
+    prod('MOCHILA CARRO TRENDY', MOCHILAS, { qty_available: 5 }), prod('Mochila  carro Trendy', MOCHILAS, { qty_available: 2.5 }),
+    prod('mochila carro trendy', MOCHILAS, { qty_available: -3 }), prod('MOCHILA CARRO TRENDY', MOCHILAS, { qty_available: 0 }),
   ], 'mochila');
-  assert.deepEqual(r.map((x) => x.nombre), ['Mochila publicada', 'Mochila sin publicar', 'Funda de mochila', 'Otra mochila']);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].cantidad, 4);
+  assert.equal(r[0].stock, 7.5);          // el stock negativo cuenta como 0
+  assert.equal(r[0].con_stock, true);
+  assert.equal(r[0].nombre, 'MOCHILA CARRO TRENDY');
+  assert.equal(r[0].categoria, 'Mochilas');
+  assert.equal(r[0].ruta, 'Mochilas');
+  assert.equal(r[0].categoria_id, 10);
+  assert.equal(r[0].codigos.length, 3);   // hasta 3 códigos de ejemplo
+  assert.equal(r[0].clave, 'mochila carro trendy|10');
+});
+
+test('el mismo nombre en categorías distintas sale por separado; sin categoría no rompe', () => {
+  const r = agrupar([prod('MOCHILA CAPYBARA', MOCHILAS), prod('MOCHILA CAPYBARA', CARTERAS), prod('MOCHILA SUELTA', null)], 'mochila');
+  assert.equal(r.length, 3);
+  const suelta = r.find(x => x.nombre === 'MOCHILA SUELTA');
+  assert.equal(suelta.categoria, 'Sin categoría');
+  assert.equal(suelta.categoria_id, null);
+});
+
+test('orden: primero los que empiezan con lo escrito, después los que tienen stock, después el orden de Odoo', () => {
+  const r = agrupar([
+    prod('BANCO CON MOCHILA', MOCHILAS), prod('MOCHILA SIN STOCK', MOCHILAS, { qty_available: 0 }), prod('MOCHILA CON STOCK', MOCHILAS),
+  ], 'mochila');
+  assert.deepEqual(r.map(x => x.nombre), ['MOCHILA CON STOCK', 'MOCHILA SIN STOCK', 'BANCO CON MOCHILA']);
+  assert.equal(r[1].con_stock, false);   // los que no tienen stock se muestran igual
 });
 
 test('respeta el límite y un producto sin nombre no cuenta', () => {
-  const lista = Array.from({ length: 12 }, (_, i) => prod('Bolso ' + i, [MARRO]));
-  assert.equal(agrupar(lista, 'bolso', 8).length, 8);
-  assert.equal(agrupar([prod('   ', [MARRO])], 'x').length, 0);
+  const lista = Array.from({ length: 12 }, (_, i) => prod('MOCHILA ' + i, MOCHILAS));
+  assert.equal(agrupar(lista, 'mochila', 5).length, 5);
+  assert.equal(agrupar([prod('', MOCHILAS)], 'mochila').length, 0);
 });
 
-const respuestaFalsa = (status, cuerpo, cab = {}) => ({ status, ok: status >= 200 && status < 300, headers: { get: (k) => cab[k.toLowerCase()] ?? null }, json: async () => cuerpo });
-const CFG = { token: 'T0K3N', tiendaId: '123' };
-
-test('API: pide por q= con la clave en el encabezado, solo lectura y solo los campos necesarios', async () => {
-  let visto;
-  const r = await pedirPagina('cartuch', 1, CFG, async (url, init) => { visto = { url, init }; return respuestaFalsa(200, [prod('A', [ESCOLAR])]); });
+test('Odoo: search_read con la clave en el encabezado, solo los campos necesarios', async () => {
+  let pedido;
+  const r = await consultarOdoo(dominio('mochila'), cfg, async (url, op) => { pedido = { url, op }; return new Response(JSON.stringify([prod('MOCHILA', MOCHILAS)]), { status: 200 }); });
+  assert.equal(pedido.url, 'https://odoo.prueba/json/2/product.template/search_read');
+  assert.equal(pedido.op.method, 'POST');
+  assert.equal(pedido.op.headers.Authorization, 'bearer clave-de-prueba');
+  const cuerpo = JSON.parse(pedido.op.body);
+  assert.deepEqual(cuerpo.fields, CAMPOS);
+  assert.ok(cuerpo.limit > 0 && cuerpo.limit <= 100);
   assert.equal(r.length, 1);
-  assert.match(visto.url, /^https:\/\/api\.tiendanube\.com\/v1\/123\/products\?q=cartuch&per_page=30&page=1&fields=id,name,published,categories,images$/);
-  assert.equal(visto.init.headers.Authentication, 'bearer T0K3N');
-  assert.equal(visto.init.method, undefined); // GET
 });
 
-test('API: 429 espera y reintenta; 404 es "sin resultados"; 401 y 500 explican el problema', async () => {
-  let k = 0;
-  const ok = await pedirPagina('a', 1, CFG, async () => (++k === 1 ? respuestaFalsa(429, null, { 'x-rate-limit-reset': '5' }) : respuestaFalsa(200, [prod('A', [])])));
-  assert.equal(k, 2);
-  assert.equal(ok.length, 1);
-  assert.deepEqual(await pedirPagina('a', 2, CFG, async () => respuestaFalsa(404, {})), []);
-  await assert.rejects(pedirPagina('a', 1, CFG, async () => respuestaFalsa(401, {})), /rechazó la clave/);
-  await assert.rejects(pedirPagina('a', 1, CFG, async () => respuestaFalsa(500, {})), /respondió 500/);
-  await assert.rejects(pedirPagina('a', 1, CFG, async () => respuestaFalsa(200, { x: 1 })), /inesperado/);
+test('Odoo: clave rechazada y otros errores se explican', async () => {
+  await assert.rejects(consultarOdoo([], cfg, async () => new Response('{}', { status: 401 })), /rechazó la clave/);
+  await assert.rejects(consultarOdoo([], cfg, async () => new Response(JSON.stringify({ name: 'odoo.exceptions.AccessError', message: 'Sin acceso' }), { status: 403 })), /rechazó la clave/);
+  await assert.rejects(consultarOdoo([], cfg, async () => new Response(JSON.stringify({ message: 'Invalid field' }), { status: 422 })), /422: Invalid field/);
+  await assert.rejects(consultarOdoo([], cfg, async () => new Response('"hola"', { status: 200 })), /inesperado/);
 });
 
-test('busca en una segunda página solo si la primera no alcanza para juntar los únicos pedidos', async () => {
-  // página 1: 30 productos que son todos el mismo nombre (1 único); página 2: 10 nombres distintos
-  const pag1 = Array.from({ length: 30 }, () => prod('Broche Trendy', [ESCOLAR]));
-  const pag2 = Array.from({ length: 10 }, (_, i) => prod('Broche Distinto ' + i, [ESCOLAR]));
-  const paginas = [];
-  const r = await buscarProductos('broche', 8, CFG, async (url) => {
-    const p = Number(new URL(url).searchParams.get('page')); paginas.push(p);
-    return respuestaFalsa(200, p === 1 ? pag1 : pag2);
-  });
-  assert.deepEqual(paginas, [1, 2]);
-  assert.equal(r.length, 8);
-  assert.equal(r[0].nombre, 'Broche Trendy');
-  assert.equal(r[0].cantidad, 30);
-  // si la primera ya alcanza, no pide la segunda
-  const solo1 = [];
-  await buscarProductos('bolso', 3, CFG, async (url) => { solo1.push(Number(new URL(url).searchParams.get('page'))); return respuestaFalsa(200, Array.from({ length: 30 }, (_, i) => prod('Bolso ' + i, [MARRO]))); });
-  assert.deepEqual(solo1, [1]);
-  // una página incompleta (menos de 30) tampoco pide más
-  const corta = [];
-  await buscarProductos('bolso', 8, CFG, async (url) => { corta.push(1); return respuestaFalsa(200, [prod('Bolso', [MARRO])]); });
-  assert.equal(corta.length, 1);
+test('busca primero los que empiezan con lo escrito y solo pide el resto si no alcanzan', async () => {
+  const pedidos = [];
+  const pedir = (respuestas) => async (url, op) => { pedidos.push(JSON.parse(op.body).domain); return new Response(JSON.stringify(respuestas.shift()), { status: 200 }); };
+  pedidos.length = 0;
+  let r = await buscarProductos('moch', 2, cfg, pedir([[prod('MOCHILA A', MOCHILAS), prod('MOCHILA B', MOCHILAS)]]));
+  assert.equal(pedidos.length, 1);
+  assert.equal(r.length, 2);
+  pedidos.length = 0;
+  const a = prod('MOCHILA A', MOCHILAS);
+  r = await buscarProductos('moch', 5, cfg, pedir([[a], [a, prod('BANCO CON MOCHILA', MOCHILAS)]]));
+  assert.equal(pedidos.length, 2);
+  assert.deepEqual(r.map(x => [x.nombre, x.cantidad]), [['MOCHILA A', 1], ['BANCO CON MOCHILA', 1]]);
+  assert.deepEqual(await buscarProductos(' a ', 5, cfg, async () => { throw new Error('no debería consultar'); }), []);
 });
 
-test('API real (solo con PROBAR_TN=<archivo .env>)', { skip: !process.env.PROBAR_TN && 'sin PROBAR_TN' }, async () => {
-  const fs = await import('node:fs');
-  const env = Object.fromEntries(fs.readFileSync(process.env.PROBAR_TN, 'utf8').split(/\r?\n/).filter(Boolean).map((l) => l.split(/=(.*)/s).slice(0, 2)));
-  const cfg = { token: env.TIENDANUBE_TOKEN, tiendaId: env.TIENDANUBE_STORE_ID };
-  for (const q of ['cartuch', 'mochila nba', 'broche', 'neceser disney']) {
-    const t0 = Date.now();
-    const r = await buscarProductos(q, 8, cfg);
-    console.log(JSON.stringify(q), Date.now() - t0 + 'ms', r.map((x) => `${x.nombre} [${x.categoria}] x${x.cantidad}${x.publicado ? '' : ' (sin publicar)'}`));
-    assert.ok(r.length > 0);
-    assert.equal(new Set(r.map((x) => x.clave)).size, r.length, 'sin repetidos');
-  }
+test('Odoo real (solo con ODOO_PRUEBA_CLAVE)', { skip: !process.env.ODOO_PRUEBA_CLAVE && 'sin ODOO_PRUEBA_CLAVE' }, async () => {
+  const real = { url: process.env.ODOO_URL || 'https://cindymayorista.odoo.com', clave: process.env.ODOO_PRUEBA_CLAVE };
+  const r = await buscarProductos('mochila trendy', 6, real);
+  assert.ok(r.length > 0, 'tiene que encontrar algo');
+  assert.ok(r.every(x => x.nombre && x.categoria && typeof x.stock === 'number'));
 });
