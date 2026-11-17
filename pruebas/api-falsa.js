@@ -196,6 +196,7 @@
     auth: {
       async ingresar() { sesion = { user: { id: yo } }; },
       async salir() { sesion = null; },
+      via: () => (sesion ? "propio" : null),
       async sesion() { return sesion; },
       alCambiar() {},
       async miPerfil() { return espera(perfiles.find(p => p.id === yo), 150); },
@@ -286,8 +287,7 @@
       await espera(null, 250);
       const c = consultas.find(x => x.id === id);
       if (!puedeCargar(c.local_id)) return error("No tenés permiso para cargar en este local");
-      if (!String(motivo || "").trim()) return error("Para anular hay que escribir el motivo");
-      Object.assign(c, { anulada: true, anulada_motivo: motivo.trim() });
+      Object.assign(c, { anulada: true, anulada_motivo: String(motivo || "").trim() || "Sin motivo" });
     },
     admin: {
       async guardarOpcion(o) {

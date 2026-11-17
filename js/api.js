@@ -4,7 +4,11 @@
 //  (Para probar sin base: pruebas/api-falsa.js reemplaza este objeto.)
 // =====================================================================
 (function (R) {
-  let sb = null;
+  // Dos conexiones a la misma base, una por tipo de login:
+  //   sbPropio -> usuario y contraseña del programa (Auth de Supabase)
+  //   sbClerk  -> cuenta Cindy (token de Clerk; ahí supabase.auth no se usa)
+  let sbPropio = null, sbClerk = null, sb = null;
+  let via = null; // "clerk" | "propio" | null
 
   function configurado() {
     const c = window.CMC_CONFIG || {};
@@ -16,9 +20,21 @@
       throw new Error("No se pudo cargar la librería de Supabase. Revisá la conexión a internet.");
     }
     const c = window.CMC_CONFIG;
-    sb = window.supabase.createClient(c.supabaseUrl.replace(/\/+$/, ""), c.supabaseKey, {
+    const url = c.supabaseUrl.replace(/\/+$/, "");
+    sbPropio = window.supabase.createClient(url, c.supabaseKey, {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: "cmc.sesion" },
     });
+    sbClerk = window.supabase.createClient(url, c.supabaseKey, { accessToken: () => window.CuentaCindy.token() });
+    sb = sbPropio;
+  }
+
+  function usar(v) { via = v; sb = v === "clerk" ? sbClerk : sbPropio; }
+
+  // Token para las Edge Functions, según con qué se entró
+  async function tokenSesion() {
+    if (via === "clerk") return await window.CuentaCindy.token();
+    const { data } = await sbPropio.auth.getSession();
+    return data.session ? data.session.access_token : null;
   }
 
   // Errores de Supabase -> mensajes para el usuario (los de las funciones de carga ya vienen en castellano)
@@ -29,6 +45,7 @@
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "No hay conexión con la base de datos. Revisá internet.";
     if (/row-level security|permission denied/i.test(m)) return "No tenés permiso para hacer esto.";
     if (/JWT expired/i.test(m)) return "La sesión venció. Volvé a ingresar.";
+    if (/No suitable key|wrong key type/i.test(m)) return "La base todavía no acepta la cuenta Cindy. Entrá con tu usuario.";
     if (/opciones_unico|duplicate key.*opciones/i.test(m)) return "Esa opción ya existe en la lista.";
     if (/vendedores_unico|duplicate key.*vendedores/i.test(m)) return "Ya hay un vendedor con ese nombre en el local.";
     if (/locales_nombre_key/i.test(m)) return "Ya hay un local con ese nombre.";
@@ -53,16 +70,40 @@
 
   // ---------- Sesión ----------
   const auth = {
+    via: () => via,
+    // Login propio. usuario: "chimola" o un email completo
     async ingresar(usuario, password) {
-      chequear(await sb.auth.signInWithPassword({ email: R.util.aEmail(usuario), password }));
+      chequear(await sbPropio.auth.signInWithPassword({ email: R.util.aEmail(usuario), password }));
+      usar("propio");
     },
-    async salir() { await sb.auth.signOut(); },
-    async sesion() { const { data } = await sb.auth.getSession(); return data.session; },
-    alCambiar(cb) { sb.auth.onAuthStateChange((evento, sesion) => cb(evento, sesion)); },
+    // Cierra la sesión de esta página. La cuenta Cindy se cierra solo si se pide,
+    // porque es la misma sesión en todas las apps.
+    async salir({ cuentaCindy = false } = {}) {
+      await sbPropio.auth.signOut();
+      if (cuentaCindy) await window.CuentaCindy.salir();
+      usar(null);
+    },
+    // ¿Hay sesión? Prefiere la cuenta Cindy, salvo que se pida ignorarla.
+    async sesion({ ignorarClerk = false } = {}) {
+      if (!ignorarClerk && window.CuentaCindy.conSesion()) { usar("clerk"); return true; }
+      const { data } = await sbPropio.auth.getSession();
+      if (data.session) { usar("propio"); return true; }
+      usar(null);
+      return false;
+    },
+    alCambiar(cb) { sbPropio.auth.onAuthStateChange((evento, sesion) => cb(evento, sesion)); },
+    // Perfil del programa. Con cuenta Cindy, la primera vez la vincula o la crea (migración cuenta_cindy).
     async miPerfil() {
-      const s = await auth.sesion();
-      if (!s) return null;
-      return chequear(await sb.from("perfiles").select("id, email, nombre, rol, activo").eq("id", s.user.id).maybeSingle());
+      if (!via) return null;
+      const r = await sb.rpc("mi_perfil");
+      // Base todavía sin la migración cuenta_cindy: el login propio sigue como antes
+      if (r.error && r.error.code === "PGRST202" && via === "propio") {
+        const { data } = await sbPropio.auth.getSession();
+        const p = chequear(await sb.from("perfiles").select("id, email, nombre, rol, activo").eq("id", data.session.user.id).maybeSingle());
+        return p && { ...p, via: "propio", tiene_login_propio: true };
+      }
+      const filas = chequear(r);
+      return (filas && filas[0]) || null;
     },
   };
 
@@ -138,13 +179,13 @@
     async buscar(q, { limite = 8, senal } = {}) {
       q = String(q || "").trim();
       if (q.length < 2) return [];
-      const c = window.CMC_CONFIG, s = await auth.sesion();
-      if (!s) throw new Error("La sesión venció. Volvé a ingresar.");
+      const c = window.CMC_CONFIG, token = await tokenSesion();
+      if (!token) throw new Error("La sesión venció. Volvé a ingresar.");
       let r;
       try {
         r = await fetch(c.supabaseUrl.replace(/\/+$/, "") + "/functions/v1/" + (c.funcionBuscarProductos || "buscar-productos"), {
           method: "POST", signal: senal, body: JSON.stringify({ q, limite }),
-          headers: { Authorization: "Bearer " + s.access_token, apikey: c.supabaseKey, "Content-Type": "application/json" },
+          headers: { Authorization: "Bearer " + token, apikey: c.supabaseKey, "Content-Type": "application/json" },
         });
       } catch (e) {
         if (e.name === "AbortError") throw e;
@@ -169,13 +210,13 @@
   // ---------- Edge Function admin-usuarios (crear cuentas, contraseñas, habilitar) ----------
   // La clave de servicio vive en la función; acá solo viaja la sesión del admin.
   async function funcionUsuarios(accion, datos = {}) {
-    const c = window.CMC_CONFIG, s = await auth.sesion();
-    if (!s) throw new Error("La sesión venció. Volvé a ingresar.");
+    const c = window.CMC_CONFIG, token = await tokenSesion();
+    if (!token) throw new Error("La sesión venció. Volvé a ingresar.");
     let r;
     try {
       r = await fetch(c.supabaseUrl.replace(/\/+$/, "") + "/functions/v1/" + (c.funcionUsuarios || "admin-usuarios"), {
         method: "POST", body: JSON.stringify({ accion, ...datos }),
-        headers: { Authorization: "Bearer " + s.access_token, apikey: c.supabaseKey, "Content-Type": "application/json" },
+        headers: { Authorization: "Bearer " + token, apikey: c.supabaseKey, "Content-Type": "application/json" },
       });
     } catch (e) {
       throw new Error('No se pudo contactar la función "admin-usuarios". ¿Está publicada en Supabase?');
@@ -197,6 +238,8 @@
     crearUsuario: d => funcionUsuarios("crear", d),
     habilitarUsuario: (id, activo) => funcionUsuarios(activo ? "activar" : "desactivar", { id }),
     cambiarPassword: (id, password) => funcionUsuarios("resetear_password", { id, password }),
+    desvincularClerk: id => funcionUsuarios("desvincular_clerk", { id }),
+    unirCuentas: (origen, destino) => funcionUsuarios("unir_cuentas", { origen, destino }),
     // { id: último ingreso } (si la función no está publicada, se sigue sin ese dato)
     async ingresos() { try { return (await funcionUsuarios("listar")).ingresos || {}; } catch (e) { return null; } },
     async guardarOpcion(o) {

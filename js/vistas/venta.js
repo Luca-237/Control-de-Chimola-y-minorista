@@ -258,9 +258,10 @@
 
   // Anular con motivo (diálogo propio)
   async function anular(c, { alAnular } = {}) {
-    const motivo = await R.util.pedir({ titulo: "Anular consulta", texto: "No se borra: queda en el historial y deja de contar en el tablero.", campo: "Motivo", boton: "Anular", peligro: true });
-    if (motivo == null) return;
-    try { await R.api.anular(c.id, motivo); R.util.toast("Consulta anulada."); if (alAnular) alAnular(); }
+    // Sin motivo: un toque para confirmar y listo (la base guarda "Sin motivo")
+    const ok = await R.util.pedir({ titulo: "¿Anular esta consulta?", texto: "Deja de contar en el tablero. Queda en la planilla como anulada.", boton: "Sí, anular", peligro: true });
+    if (ok == null) return;
+    try { await R.api.anular(c.id, ""); R.util.toast("Consulta anulada."); if (alAnular) alAnular(); }
     catch (e) { R.util.toast(e.message, "error", 6000); }
   }
 

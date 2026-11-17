@@ -117,17 +117,25 @@
     R.vistaAcceso.mostrar("pantalla-carga");
     let perfil;
     try { perfil = await R.api.auth.miPerfil(); }
-    catch (e) { R.vistaAcceso.mostrar("pantalla-login"); return R.vistaAcceso.errorLogin(e.message); }
+    catch (e) { R.vistaAcceso.mostrarCindy(); R.vistaAcceso.mostrar("pantalla-login"); return R.vistaAcceso.errorLogin(e.message); }
+    const cindy = R.api.auth.via && R.api.auth.via() === "clerk";
     if (!perfil || !perfil.activo) {
-      await R.api.auth.salir();
+      // Cuenta Cindy sin habilitar acá pero con sesión del login propio: usar esa
+      if (cindy && await R.api.auth.sesion({ ignorarClerk: true })) return entrar();
+      // La cuenta Cindy no se cierra: le sirve en las otras apps
+      if (!cindy) await R.api.auth.salir();
+      R.vistaAcceso.mostrarCindy();
       R.vistaAcceso.mostrar("pantalla-login");
-      return R.vistaAcceso.errorLogin("Tu usuario no está habilitado. Hablá con un admin.");
+      return R.vistaAcceso.errorLogin(cindy
+        ? "Tu cuenta Cindy todavía no está habilitada acá. Pedile a un admin que la habilite, o entrá con tu usuario de siempre."
+        : "Tu usuario no está habilitado. Hablá con un admin.");
     }
     R.estado.perfil = perfil;
     try { R.estado.catalogo = await R.api.catalogo(perfil); }
     catch (e) { R.vistaAcceso.mostrar("pantalla-login"); return R.vistaAcceso.errorLogin(e.message); }
     if (perfil.rol === "carga" && !R.estado.catalogo.misLocales.length) {
-      await R.api.auth.salir();
+      if (!cindy) await R.api.auth.salir();
+      R.vistaAcceso.mostrarCindy();
       R.vistaAcceso.mostrar("pantalla-login");
       return R.vistaAcceso.errorLogin("Tu usuario no tiene ningún local asignado. Hablá con un admin.");
     }
@@ -140,6 +148,10 @@
     R.vistaAcceso.mostrar("app");
     ir();
     app.contadores();
+  }
+
+  async function entrarConCindy() {
+    if (await R.api.auth.sesion()) await entrar();
   }
 
   function salir() {
@@ -171,7 +183,7 @@
     envolverEscrituras();
     R.util.iniciarDialogos();
     R.util.iniciarAyudas();
-    R.vistaAcceso.iniciar({ alIngresar: entrar, alSalir: salir });
+    R.vistaAcceso.iniciar({ alIngresar: entrar, alIngresarCindy: entrarConCindy, alSalir: salir });
     // El texto de cada opción del menú va en su propio <span> para que, con el menú recogido, queden solo los iconos
     document.querySelectorAll(".lateral a").forEach(l => {
       const texto = [...l.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim());
@@ -215,8 +227,19 @@
       if ($("lateral").classList.contains("abierto") && !e.target.closest("#lateral, #btn-menu")) $("lateral").classList.remove("abierto");
     });
 
+    // Cuenta Cindy: si no está configurada o no carga, sigue solo el login propio
+    if (window.CuentaCindy) await window.CuentaCindy.cargar((window.CMC_CONFIG || {}).clerkPublishableKey);
+    R.vistaAcceso.mostrarCindy();
+
     R.api.auth.alCambiar(evento => {
-      if (evento === "SIGNED_OUT") { salir(); R.vistaAcceso.mostrar("pantalla-login"); }
+      if (evento === "SIGNED_OUT" && (!R.api.auth.via || R.api.auth.via() !== "clerk")) { salir(); R.vistaAcceso.mostrar("pantalla-login"); }
+    });
+    if (window.CuentaCindy) window.CuentaCindy.alCambiar(({ session }) => {
+      R.vistaAcceso.mostrarCindy();
+      if (R.api.auth.via && R.api.auth.via() === "clerk" && !session && R.estado.perfil) { // se cerró desde otra app
+        salir();
+        R.vistaAcceso.mostrar("pantalla-login");
+      }
     });
 
     if (await R.api.auth.sesion()) await entrar();

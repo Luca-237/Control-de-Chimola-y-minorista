@@ -115,3 +115,11 @@ En la PC, con un servidor local (por ejemplo `npx http-server` en esta carpeta),
 - `http://localhost:PUERTO/?demo=consulta`: lo que ve Mariela.
 
 Usa `pruebas/api-falsa.js` con unos meses de consultas inventadas. No toca Supabase y solo funciona en `localhost`.
+
+## 10. Anular sin motivo (migración 6)
+
+Anular una consulta ya no pide motivo: un toque para confirmar ("¿Anular esta consulta?" → "Sí, anular") y listo. La base guarda "Sin motivo" y sigue registrando quién y cuándo anuló. Correr en el SQL Editor `supabase/migrations/20261116200000_anular_sin_motivo.sql` (se puede volver a correr). Sin esta migración, la página nueva da "Para anular hay que escribir el motivo".
+
+## Borrar todas las consultas (mantenimiento, no es migración)
+
+`supabase/mantenimiento/borrar-todas-las-consultas.sql` deja la base de consultas vacía para arrancar en limpio después de las pruebas: borra todas las consultas, sus artículos y el historial, y la numeración vuelve a 1. No toca usuarios, perfiles, locales, listas, empleados ni configuración. **Es definitivo.** Se corre una sola vez, a mano, en el SQL Editor (no va en `supabase/migrations`, porque las migraciones se vuelven a correr al armar una base nueva y en las pruebas).

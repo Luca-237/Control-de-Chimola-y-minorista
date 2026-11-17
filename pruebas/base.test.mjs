@@ -33,6 +33,13 @@ before(async () => {
     create function auth.uid() returns uuid language sql stable
       as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to anon, authenticated;
+    -- Como en Supabase: auth.jwt() con los datos del token (PostgREST llena request.jwt.claims)
+    create function auth.jwt() returns jsonb language sql stable as $$
+      select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb)
+        || case when nullif(current_setting('request.jwt.claim.sub', true), '') is not null
+                then jsonb_build_object('sub', current_setting('request.jwt.claim.sub', true), 'iss', 'https://x.supabase.co/auth/v1')
+                else '{}'::jsonb end $$;
+    grant execute on function auth.jwt() to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;
   `);
   for (const sql of migraciones()) await db.exec(sql);
@@ -213,9 +220,14 @@ test('"Lo piensa": se cierra cuando sea, la venta cae en la fecha del cierre y v
   await assert.rejects(cerrar(U.cindy, id, { estado: 'no_compro' }), /no está en "Lo piensa"/);
 });
 
-test('anular: necesita motivo, deja historial y sale de los artículos vendidos', async () => {
+test('anular: sin motivo se anula igual ("Sin motivo"); con motivo lo guarda; deja historial y sale de los artículos vendidos', async () => {
+  const sinMotivo = await guardar(U.cindy, ventaCindy());
+  await anular(U.cindy, sinMotivo, '  ');
+  assert.equal((await fila(sinMotivo)).anulada_motivo, 'Sin motivo');
+  const otra = await guardar(U.cindy, ventaCindy());
+  await anular(U.cindy, otra, null);
+  assert.equal((await fila(otra)).anulada, true);
   const id = await guardar(U.cindy, ventaCindy());
-  await assert.rejects(anular(U.cindy, id, '  '), /motivo/);
   await anular(U.cindy, id, 'cargada dos veces');
   const c = await fila(id);
   assert.equal(c.anulada, true);

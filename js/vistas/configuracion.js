@@ -143,16 +143,21 @@
     const yo = R.estado.perfil.id;
     cuerpo.innerHTML = perfiles.map(p => {
       const soyYo = p.id === yo;
-      const ingreso = ingresos ? (ingresos[p.id] ? R.util.fechaHora(ingresos[p.id]) : "Nunca") : "—";
+      const fecha = ingresos ? ingresos[p.auth_id || p.id] : null; // último ingreso: solo del login propio
+      const ingreso = ingresos ? (fecha ? R.util.fechaHora(fecha) : (p.clerk_id && !p.auth_id ? "Cuenta Cindy" : "Nunca")) : "—";
+      const propio = p.auth_id !== null || !("auth_id" in p); // base sin la migración: todos son propios
       return `<tr data-id="${p.id}" class="${p.activo ? "" : "inactivo"}">
-        <td><strong>${esc(aUsuario(p.email))}</strong>${soyYo ? "<small>(vos)</small>" : ""}</td>
+        <td><strong>${esc(aUsuario(p.email))}</strong>${soyYo ? "<small>(vos)</small>" : ""}
+          <div>${propio ? `<span class="chip-login">Usuario de siempre</span>` : ""}${p.clerk_id ? `<span class="chip-login">Cuenta Cindy</span>` : ""}</div></td>
         <td><input type="text" value="${esc(p.nombre)}" data-nombre maxlength="60" style="min-width:140px" aria-label="Nombre"></td>
         <td><select data-rol ${soyYo ? "disabled title=\"No podés cambiar tu propio rol\"" : ""} aria-label="Rol">${ROLES.map(([k, t]) => `<option value="${k}" ${k === p.rol ? "selected" : ""}>${t}</option>`).join("")}</select></td>
         <td>${p.rol === "carga" ? `<div class="locales-usuario">${locales.map(l => `<label><input type="checkbox" data-local="${l.id}" ${p.locales.includes(l.id) ? "checked" : ""}>${esc(l.nombre)}</label>`).join("")}</div>`
           + (p.locales.length ? "" : `<small class="aviso">Sin local: no puede entrar</small>`) : `<small>Todos</small>`}</td>
         <td><small>${esc(ingreso)}</small></td>
         <td><label class="interruptor" ${soyYo ? "title=\"No podés deshabilitar tu propia cuenta\"" : ""}><input type="checkbox" data-activo ${p.activo ? "checked" : ""} ${soyYo ? "disabled" : ""}><span class="interruptor-pista"></span>${p.activo ? "Habilitado" : "Deshabilitado"}</label></td>
-        <td><button type="button" class="link" data-password>Cambiar contraseña</button></td>
+        <td>${propio ? `<button type="button" class="link" data-password>Cambiar contraseña</button>` : ""}
+          ${p.clerk_id && propio ? `<button type="button" class="link" data-desvincular>Desvincular cuenta Cindy</button>` : ""}
+          ${p.clerk_id && !propio ? `<button type="button" class="link" data-unir>Unir con usuario de siempre</button>` : ""}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="7" class="vacio">No hay usuarios.</td></tr>`;
   }
@@ -247,11 +252,28 @@
     $("nu-usuario").addEventListener("input", pintarNuevo);
     $("nu-generar").addEventListener("click", () => { $("nu-password").value = generarPassword(); });
     $("form-usuario").addEventListener("submit", crearNuevo);
-    $("us-cuerpo").addEventListener("click", e => {
-      const b = e.target.closest("[data-password]");
+    $("us-cuerpo").addEventListener("click", async e => {
+      const b = e.target.closest("[data-password], [data-desvincular], [data-unir]");
       if (!b) return;
       const p = perfilesActuales.find(x => x.id === b.closest("tr").dataset.id);
-      if (p) cambiarPassword(p);
+      if (!p) return;
+      if (b.matches("[data-password]")) return cambiarPassword(p);
+      try {
+        if (b.matches("[data-desvincular]")) {
+          if ((await R.util.pedir({ titulo: "Desvincular cuenta Cindy", texto: `${p.nombre || aUsuario(p.email)} va a seguir entrando con su usuario de siempre.`, boton: "Desvincular" })) == null) return;
+          await R.api.admin.desvincularClerk(p.id);
+          R.util.toast("Cuenta Cindy desvinculada.");
+        } else {
+          const destino = await R.util.pedir({ titulo: "Unir con usuario de siempre", texto: `La cuenta Cindy de ${p.nombre || aUsuario(p.email)} pasa al usuario que escribas (con su rol, locales y estado). El registro suelto se borra.`, campo: "Usuario (ej: chimola)", boton: "Unir" });
+          if (!destino) return;
+          const buscado = destino.trim().toLowerCase();
+          const d = perfilesActuales.find(x => x.auth_id && !x.clerk_id && (aUsuario(x.email) === buscado || (x.email || "").toLowerCase() === buscado));
+          if (!d) return R.util.toast(`No hay un usuario "${destino}" sin cuenta Cindy.`, "error", 6000);
+          await R.api.admin.unirCuentas(p.id, d.id);
+          R.util.toast("Cuentas unidas.");
+        }
+      } catch (err) { R.util.toast(err.message, "error", 7000); }
+      mostrarUsuarios();
     });
     $("us-cuerpo").addEventListener("change", async e => {
       const tr = e.target.closest("tr[data-id]");

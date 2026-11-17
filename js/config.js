@@ -11,4 +11,7 @@ window.CMC_CONFIG = {
   dominioUsuarios: "minorista.cindymayorista.com.ar",
   // Cuántos meses hacia atrás se pueden consultar en el tablero (para no traer años de datos de una vez)
   mesesMaximos: 24,
+  // Cuenta Cindy (Clerk). Clave publicable (pk_live_... o pk_test_...), no es secreta.
+  // Vacía = solo el login propio.
+  clerkPublishableKey: "pk_test_bmljZS1hcmFjaG5pZC04ODY0LmNsZXJrLmFjY291bnRzLmRldiQ",
 };
