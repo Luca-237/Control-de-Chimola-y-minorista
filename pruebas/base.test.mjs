@@ -118,7 +118,6 @@ test('una venta incompleta se rechaza', async () => {
   await assert.rejects(guardar(U.cindy, ventaCindy({ pago_id: null })), /forma de pago/);
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ rubro_id: cm().rubro.Mochilas, cantidad: 1.5, monto: 10 }] })), /entero/);
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ rubro_id: cm().rubro.Mochilas, cantidad: 1, monto: -1 }] })), /monto/);
-  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ cantidad: 1, monto: 10 }] })), /Falta el nombre del producto/);   // ni producto, ni nombre, ni rubro
   await assert.rejects(guardar(U.cindy, { local_id: L['Cindy Minorista'], estado: 'no_compro' }), /canal/);
   await assert.rejects(guardar(U.cindy, { local_id: L['Cindy Minorista'], canal_id: cm().canal.WhatsApp, estado: 'tal vez' }), /Estado no válido/);
 });
@@ -174,11 +173,13 @@ test('fechas: nada futuro y hasta 7 días atrás para el local', async () => {
   assert.ok(id > 0);
 });
 
-test('"Lo piensa" pide al menos un dato del cliente (nombre, teléfono o usuario); quedan guardados al cerrarla', async () => {
+test('"Lo piensa": los datos del cliente son opcionales; los que se cargan quedan guardados al cerrarla', async () => {
   const base = { local_id: L['Cindy Minorista'], canal_id: cm().canal.Instagram, estado: 'lo_piensa' };
-  await assert.rejects(guardar(U.cindy, base), /falta un dato del cliente/);
-  await assert.rejects(guardar(U.cindy, { ...base, cliente_nombre: '  ', cliente_contacto: ' ' }), /falta un dato del cliente/);
-  // Con uno solo alcanza
+  // Sin ningún dato también se guarda (no frena la carga)
+  const sinDatos = await guardar(U.cindy, base);
+  assert.deepEqual([(await fila(sinDatos)).cliente_nombre, (await fila(sinDatos)).cliente_contacto], ['', '']);
+  await guardar(U.cindy, { ...base, cliente_nombre: '  ', cliente_contacto: ' ' });
+  // Con uno solo, igual
   const soloUsuario = await guardar(U.cindy, { ...base, cliente_contacto: '@solo.usuario' });
   assert.equal((await fila(soloUsuario)).cliente_nombre, '');
   const soloNombre = await guardar(U.cindy, { ...base, cliente_nombre: 'Solo Nombre' });
@@ -186,11 +187,13 @@ test('"Lo piensa" pide al menos un dato del cliente (nombre, teléfono o usuario
   const id = await guardar(U.cindy, { ...base, cliente_nombre: '  Ana Pérez ', cliente_contacto: '@ana.perez' });
   const v = (await como(U.cindy, 'select cliente_nombre, cliente_contacto from public.consultas_vista where id = $1', [id]))[0];
   assert.deepEqual(v, { cliente_nombre: 'Ana Pérez', cliente_contacto: '@ana.perez' });
-  // Corregir sin mandar los datos del cliente no los borra; pasarla a "lo piensa" sin datos no se puede
+  // Corregir sin mandar los datos del cliente no los borra; también se pueden borrar todos
   await guardar(U.cindy, { id, estado: 'lo_piensa', nota: 'vuelve el sábado' });
   assert.equal((await fila(id)).cliente_nombre, 'Ana Pérez');
   await guardar(U.cindy, { id, estado: 'lo_piensa', cliente_contacto: '' });   // queda el nombre: alcanza
-  await assert.rejects(guardar(U.cindy, { id, estado: 'lo_piensa', cliente_nombre: '', cliente_contacto: '' }), /falta un dato del cliente/);
+  await guardar(U.cindy, { id, estado: 'lo_piensa', cliente_nombre: '', cliente_contacto: '' });
+  assert.equal((await fila(id)).cliente_nombre, '');
+  await guardar(U.cindy, { id, estado: 'lo_piensa', cliente_nombre: 'Ana Pérez' });
   await guardar(U.cindy, { id, estado: 'lo_piensa', cliente_contacto: '@ana.perez' });
   await cerrar(U.cindy, id, { estado: 'no_compro' });
   assert.equal((await fila(id)).cliente_contacto, '@ana.perez');
@@ -282,11 +285,14 @@ test('catálogo: un artículo del buscador no necesita rubro ni marca y guarda p
   assert.equal(Number((await fila(id)).monto_total), 79000);
 });
 
-test('catálogo: sin producto o sin categoría se rechaza; fuera del catálogo alcanza con el nombre tal como se escribió', async () => {
+test('catálogo: sin producto o sin categoría se rechaza; fuera del catálogo no se pide nada (ni nombre ni rubro)', async () => {
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ producto: '  ' })] })), /Falta el producto/);
   await assert.rejects(guardar(U.cindy, ventaCindy({ items: [itemCatalogo({ categoria: '' })] })), /Falta la categoría/);
-  // sin nombre y sin rubro no se puede
-  await assert.rejects(guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, descripcion: '  ', cantidad: 1, monto: 10 }] })), /Falta el nombre del producto/);
+  // sin nombre y sin rubro también se guarda (en las estadísticas cuenta como "Otros")
+  const sinNombre = await guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, descripcion: '  ', cantidad: 1, monto: 10 }] }));
+  const sn = (await como(U.cindy, 'select descripcion, rubro_id, catalogo from public.venta_items_vista where consulta_id = $1', [sinNombre]))[0];
+  assert.deepEqual([sn.rubro_id, sn.catalogo], [null, false]);
+  await guardar(U.cindy, ventaCindy({ items: [{ cantidad: 1, monto: 10 }] }));
   // con el nombre solo, sin rubro, sí
   const id = await guardar(U.cindy, ventaCindy({ items: [{ catalogo: false, descripcion: 'Paraguas transparente con luces', cantidad: 2, monto: 30000 }] }));
   const it = (await como(U.cindy, 'select descripcion, rubro_id, catalogo from public.venta_items_vista where consulta_id = $1', [id]))[0];

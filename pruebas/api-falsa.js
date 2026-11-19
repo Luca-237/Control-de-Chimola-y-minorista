@@ -174,7 +174,7 @@
       if (it.catalogo) {
         if (!String(it.producto || "").trim()) throw new Error("Falta el producto de un artículo");
         if (!String(it.categoria || "").trim()) throw new Error("Falta la categoría del producto de un artículo");
-      } else if (!it.rubro_id && !String(it.descripcion || "").trim()) throw new Error("Falta el nombre del producto de un artículo");
+      }
       if (!(it.cantidad >= 1) || it.cantidad % 1) throw new Error("La cantidad tiene que ser un número entero mayor a cero");
       if (it.monto == null || it.monto < 0) throw new Error("Falta el monto de un artículo o es negativo");
     }
@@ -257,8 +257,6 @@
       if (Date.parse(fecha) > Date.now() + 300000) return error("La fecha de la consulta no puede ser futura");
       if (rolDemo !== "admin" && (!actual || fecha !== actual.fecha_consulta) && Date.parse(fecha) < Date.now() - l.dias_carga_atrasada * 86400000) return error(`Solo se pueden cargar consultas de hasta ${l.dias_carga_atrasada} días atrás`);
       if (p.estado === "compro") { try { controlarVenta(local, p); } catch (e) { return error(e.message); } }
-      if (p.estado === "lo_piensa" && !(String(p.cliente_nombre ?? (actual && actual.cliente_nombre) ?? "").trim() || String(p.cliente_contacto ?? (actual && actual.cliente_contacto) ?? "").trim()))
-        return error('Para dejarla en "Lo piensa" falta un dato del cliente: nombre, teléfono o usuario');
       const c = actual || { id: idC++, local_id: local, origen: "carga", anulada: false, anulada_motivo: "", creado_por: yo, creado_en: new Date().toISOString(), cerrada_en: null };
       Object.assign(c, {
         fecha_consulta: fecha, canal_id: Number(p.canal_id || c.canal_id), estado: p.estado, atendio_id: p.atendio_id ? Number(p.atendio_id) : null,

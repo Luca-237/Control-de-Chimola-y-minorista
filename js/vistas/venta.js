@@ -157,11 +157,13 @@
         cont.querySelectorAll(".campo-error").forEach(x => x.classList.remove("campo-error"));
         const faltan = [];
         const marcar = (el, texto) => { el.classList.add("campo-error"); faltan.push(texto); };
+        const escritos = {};
         cont.querySelectorAll(".articulo").forEach(a => {
           const it = items[Number(a.dataset.i)], n = Number(a.dataset.i) + 1;
-          if (!it.modo) marcar(a.querySelector('[data-campo="producto"]'), `el producto del artículo ${n}`);
-          // Tal como está (fuera del catálogo): alcanza con el nombre; sin rubro ni marca obligatorios
-          if (it.modo === "libre" && !it.descripcion) marcar(a.querySelector('[data-campo="nombre-libre"]'), `el nombre del producto del artículo ${n}`);
+          // Producto no elegido en el buscador: no frena. Se guarda tal como se escribió (o sin nombre),
+          // fuera del catálogo, y en las estadísticas cuenta como "Otros".
+          // (no se toca el artículo en pantalla: si falta otra cosa, se sigue pudiendo elegir del buscador)
+          if (!it.modo) escritos[n - 1] = (a.querySelector(".bp-input")?.value || "").replace(/\s+/g, " ").trim();
           if (!(it.cantidad >= 1) || it.cantidad % 1) faltan.push(`una cantidad válida en el artículo ${n}`);
           if (it.monto == null || it.monto < 0) marcar(a.querySelector('[data-campo="monto"]'), `el monto del artículo ${n}`);
         });
@@ -172,10 +174,13 @@
           cont.querySelector(".campo-error")?.scrollIntoView({ behavior: "smooth", block: "center" });
           return { ok: false, error: "Falta " + faltan.slice(0, 3).join(", ") + (faltan.length > 3 ? " y más." : ".") };
         }
-        return { ok: true, datos: { envio_id, pago_id, items: items.map(i => i.modo === "catalogo"
+        return { ok: true, datos: { envio_id, pago_id, items: items.map((i, n) => i.modo === "catalogo"
           ? { catalogo: true, producto: i.producto, producto_clave: i.producto_clave, categoria: i.categoria, categoria_ruta: i.categoria_ruta,
               categoria_tn_id: i.categoria_tn_id || null, rubro_id: null, marca_id: null, descripcion: i.descripcion || "", cantidad: i.cantidad, monto: i.monto }
-          : { catalogo: false, rubro_id: i.rubro_id, marca_id: i.marca_id || null, descripcion: i.descripcion || "", cantidad: i.cantidad, monto: i.monto }) } };
+          : i.modo === "libre"
+            ? { catalogo: false, rubro_id: i.rubro_id, marca_id: i.marca_id || null, descripcion: i.descripcion || "", cantidad: i.cantidad, monto: i.monto }
+            // Sin elegir: lo escrito en el buscador es el nombre; lo de "Detalle" se suma
+            : { catalogo: false, rubro_id: null, marca_id: null, descripcion: [escritos[n], i.descripcion].filter(Boolean).join(" · ").slice(0, 120), cantidad: i.cantidad, monto: i.monto }) } };
       },
     };
   }
@@ -204,7 +209,7 @@
         `<button type="button" class="pastilla" data-estado="${k}" aria-pressed="${k === estado}">${t}</button>`).join("")}</div>
       <div id="ed-venta" style="margin-top:14px" ${estado === "compro" ? "" : "hidden"}></div>
       <div class="form-grid">
-        <div><label for="ed-cliente-nombre">Cliente: nombre <span id="ed-cliente-req">${estado === "lo_piensa" ? "(o teléfono / usuario: al menos uno)" : "(opcional)"}</span></label>
+        <div><label for="ed-cliente-nombre">Cliente: nombre (opcional)</label>
           <input type="text" id="ed-cliente-nombre" maxlength="120" autocapitalize="words" value="${esc(c.cliente_nombre || "")}"></div>
         <div><label for="ed-cliente-contacto" id="ed-cliente-contacto-label">Usuario o nro. telefónico</label>
           <input type="text" id="ed-cliente-contacto" maxlength="80" value="${esc(c.cliente_contacto || "")}"></div>
@@ -222,7 +227,6 @@
       estado = b.dataset.estado;
       $("ed-estados").querySelectorAll("[data-estado]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
       $("ed-venta").hidden = estado !== "compro";
-      $("ed-cliente-req").textContent = estado === "lo_piensa" ? "(o teléfono / usuario: al menos uno)" : "(opcional)";
     });
     $("ed-anular").addEventListener("click", () => { d.close(); anular(c, { alAnular: alGuardar }); });
     $("ed-guardar").addEventListener("click", async () => {
@@ -233,13 +237,9 @@
         atendio_id: $("ed-atendio").value ? Number($("ed-atendio").value) : null,
         nota: $("ed-nota").value.trim(),
       };
-      // Cliente: obligatorio en "Lo piensa"; en las otras, si escribieron algo se controla igual
-      const nom = $("ed-cliente-nombre").value, con = $("ed-cliente-contacto").value;
-      if (estado === "lo_piensa" || nom.trim() || con.trim()) {
-        const cl = validarCliente(nom, con, nombreCanal(p.canal_id));
-        if (!cl.ok) { $("ed-error").textContent = cl.error; $("ed-cliente-" + cl.campo).focus(); return; }
-        p.cliente_nombre = cl.nombre; p.cliente_contacto = cl.contacto;
-      } else { p.cliente_nombre = ""; p.cliente_contacto = ""; }
+      // Cliente: todo opcional, en cualquier resultado
+      const cl = validarCliente($("ed-cliente-nombre").value, $("ed-cliente-contacto").value);
+      p.cliente_nombre = cl.nombre; p.cliente_contacto = cl.contacto;
       if (estado === "compro") {
         const r = venta.leer();
         if (!r.ok) { $("ed-error").textContent = r.error; return; }
@@ -274,20 +274,15 @@
   }
   // ¿Lo escrito es un teléfono? Solo números, espacios, guiones, paréntesis, puntos o un + adelante
   const pareceTelefono = s => /^\+?[\d\s().-]+$/.test(s) && /\d/.test(s);
-  // Devuelve { ok, nombre, contacto } listos para guardar, o { ok: false, error, campo }
+  // Todos los datos del cliente son opcionales y nunca frenan la carga: devuelve siempre { ok: true, nombre, contacto }.
+  // Solo se ordena lo escrito: un teléfono queda con espacios simples y un usuario de Instagram válido queda como @usuario;
+  // cualquier otra cosa se guarda tal cual.
   function validarCliente(nombre, contacto) {
-    nombre = String(nombre || "").replace(/\s+/g, " ").trim();
-    contacto = String(contacto || "").trim();
-    if (!nombre && !contacto) return { ok: false, campo: "nombre", error: "Completá al menos un dato del cliente: nombre, usuario o nro. telefónico." };
-    if (!contacto) return { ok: true, nombre, contacto: "" };   // con el nombre alcanza
-    // Si escribieron usuario o teléfono, se revisa que se pueda usar para escribirle
-    if (pareceTelefono(contacto)) {
-      if (contacto.replace(/\D/g, "").length < 6) return { ok: false, campo: "contacto", error: "Revisá el teléfono: tiene muy pocos números (o borralo y dejá solo el nombre)." };
-      return { ok: true, nombre, contacto: contacto.replace(/\s+/g, " ") };
-    }
+    nombre = String(nombre || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    contacto = String(contacto || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!contacto || pareceTelefono(contacto)) return { ok: true, nombre, contacto };
     const u = contacto.replace(/^@+/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/[/?#].*$/, "");
-    if (!/^[a-z0-9._]{2,30}$/i.test(u)) return { ok: false, campo: "contacto", error: "Revisá el usuario: solo letras, números, puntos y guiones bajos, sin espacios. Si es un teléfono, escribí solo los números." };
-    return { ok: true, nombre, contacto: "@" + u.toLowerCase() };
+    return { ok: true, nombre, contacto: /^[a-z0-9._]{2,30}$/i.test(u) ? "@" + u.toLowerCase() : contacto };
   }
   // Enlace para escribirle (WhatsApp o Instagram), o null
   function enlaceContacto(contacto) {
@@ -316,7 +311,7 @@
       ? `${i.producto}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`
       : i.catalogo === false && i.descripcion
         ? `${i.descripcion} (${[i.rubro, i.marca, "fuera del catálogo"].filter(Boolean).join(", ")}) x${i.cantidad}`
-        : `${i.rubro || "Sin rubro"}${i.marca ? " " + i.marca : ""}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`).join(" · ");
+        : `${i.rubro || (i.catalogo === false ? "Otros" : "Sin rubro")}${i.marca ? " " + i.marca : ""}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`).join(" · ");
   }
 
   R.venta = { opcionesDe, pastillas, grupoUnico, elegido, crear, editar, anular, textoArticulos, iconoCanal,

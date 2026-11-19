@@ -150,7 +150,7 @@
       const partes = i.categoria_ruta.split(' > ').map(x => x.trim()).filter(Boolean);
       if (partes.length) return nivel >= 3 ? partes[partes.length - 1] : partes[Math.min(nivel, partes.length) - 1];
     }
-    return i.rubro || 'Sin categoría';
+    return i.rubro || 'Otros';
   }
   // Artículos vendidos agrupados por categoría (rubro, subrubro o la más profunda)
   function itemsPorCategoria(items, nivel = 1) {
@@ -176,7 +176,7 @@
       const k = i.producto ? (i.producto_clave || i.producto) : 'libre|' + normProd(i.descripcion) + '|' + (i.rubro || '');
       const g = m.get(k) || (i.producto
         ? { nombre: i.producto, categoria: i.categoria || '', ruta: i.categoria_ruta || '', unidades: 0, monto: 0, ventas: new Set() }
-        : { nombre: String(i.descripcion).trim(), categoria: (i.rubro ? i.rubro + ' · ' : '') + 'fuera del catálogo', ruta: '', libre: true, unidades: 0, monto: 0, ventas: new Set() });
+        : { nombre: String(i.descripcion || '').trim() || 'Producto sin nombre', categoria: (i.rubro || 'Otros') + ' · fuera del catálogo', ruta: '', libre: true, unidades: 0, monto: 0, ventas: new Set() });
       g.unidades += Number(i.cantidad) || 0; g.monto += Number(i.monto) || 0; g.ventas.add(i.consulta_id);
       m.set(k, g);
     }

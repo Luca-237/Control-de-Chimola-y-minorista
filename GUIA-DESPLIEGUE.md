@@ -32,6 +32,8 @@ Antes de publicar, en Supabase tiene que estar todo lo que la página usa (detal
   4. `20261113300000_lo_piensa_un_dato.sql` (en "Lo piensa" alcanza con un dato: nombre, teléfono o usuario)
   5. `20261116100000_producto_libre_sin_rubro.sql` (un producto fuera del catálogo se guarda tal como se escribió, sin rubro)
   6. `20261116200000_anular_sin_motivo.sql` (anular una consulta sin escribir motivo)
+  7. `20261117200000_cuenta_cindy.sql` (entrar con la cuenta Cindy)
+  8. `20261119100000_datos_opcionales.sql` (datos del cliente opcionales también en "Lo piensa"; un producto sin elegir del buscador se guarda igual y cuenta como "Otros")
 
 Para **arrancar en limpio** después de las pruebas: `supabase/mantenimiento/borrar-todas-las-consultas.sql` (borra todas las consultas, sus artículos y el historial; no toca usuarios, locales, listas ni empleados; es definitivo). No es una migración: se corre una sola vez, a mano.
 - **Edge Functions** publicadas, las dos con **"Verify JWT" apagado**:

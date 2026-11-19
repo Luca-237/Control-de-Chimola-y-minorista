@@ -95,7 +95,7 @@ test('categoría de un artículo: rubro, subrubro o la más profunda; sin ruta c
   assert.equal(M.categoriaDe(art(1, cartuchera), 3), 'Cartucheras');
   // texto libre o de antes del buscador
   assert.equal(M.categoriaDe(art(1, { rubro: 'Billeteras' }), 1), 'Billeteras');
-  assert.equal(M.categoriaDe(art(1, {}), 2), 'Sin categoría');
+  assert.equal(M.categoriaDe(art(1, {}), 2), 'Otros');
 });
 
 test('categorías más vendidas: agrupa por nivel y ordena por monto', () => {

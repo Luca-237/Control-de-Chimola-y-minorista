@@ -156,13 +156,8 @@
     }
     if (estado === "lo_piensa") {
       $("cargar-cliente").querySelectorAll(".campo-error").forEach(x => x.classList.remove("campo-error"));
-      const cl = V.validarCliente($("cargar-cliente-nombre").value, $("cargar-cliente-contacto").value, V.nombreCanal(canal));
-      if (!cl.ok) {
-        $("cargar-error").textContent = cl.error;
-        $("cargar-cliente").querySelector(`[data-campo="${cl.campo}"]`).classList.add("campo-error");
-        $("cargar-cliente-" + cl.campo).focus();
-        return;
-      }
+      // Datos del cliente: todos opcionales, nunca frenan la carga
+      const cl = V.validarCliente($("cargar-cliente-nombre").value, $("cargar-cliente-contacto").value);
       p.cliente_nombre = cl.nombre;
       p.cliente_contacto = cl.contacto;
     }
