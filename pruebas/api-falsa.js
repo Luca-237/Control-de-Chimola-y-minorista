@@ -216,6 +216,14 @@
           .sort((a, b) => Number(norm(b[0]).startsWith(buscado)) - Number(norm(a[0]).startsWith(buscado)) || Number(b[2]) - Number(a[2]))
           .slice(0, limite).map(resultadoCatalogo);
       },
+      // Imita la búsqueda por código exacto (pistola). Códigos de barras de ejemplo: 7790000000000 + posición en el catálogo
+      // (Mochila Trendy = 7790000000000, Mochila NBA Lakers = 7790000000001, …) o el código interno (317000, 317007, …)
+      async porCodigo(codigo, { senal } = {}) {
+        codigo = String(codigo || "").replace(/\s+/g, "");
+        await new Promise(ok => setTimeout(ok, 180));
+        if (senal && senal.aborted) throw new DOMException("Cancelado", "AbortError");
+        return CATALOGO.filter((c, i) => codigo === String(7790000000000 + i) || codigo === String(317000 + i * 7)).map(resultadoCatalogo);
+      },
     },
     async catalogo(perfil) {
       const mis = perfil.rol === "carga" ? locales.filter(l => puedeVer(l.id)) : locales;

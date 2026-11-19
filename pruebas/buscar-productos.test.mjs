@@ -3,7 +3,7 @@
 // solo consulta; nunca se guarda en un archivo) además consulta Odoo de verdad.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizar, palabras, dominio, agrupar, consultarOdoo, buscarProductos, CAMPOS } from '../supabase/functions/buscar-productos/index.ts';
+import { normalizar, palabras, dominio, agrupar, consultarOdoo, buscarProductos, CAMPOS, limpiarCodigo, dominioCodigo, buscarPorCodigo } from '../supabase/functions/buscar-productos/index.ts';
 
 let n = 0;
 const prod = (nombre, categoria, extra = {}) => ({ id: ++n, name: nombre, default_code: String(300000 + n), categ_id: categoria ? [categoria[0], categoria[1]] : false, qty_available: 1, ...extra });
@@ -96,6 +96,26 @@ test('busca primero los que empiezan con lo escrito y solo pide el resto si no a
   assert.equal(pedidos.length, 2);
   assert.deepEqual(r.map(x => [x.nombre, x.cantidad]), [['MOCHILA A', 1], ['BANCO CON MOCHILA', 1]]);
   assert.deepEqual(await buscarProductos(' a ', 5, cfg, async () => { throw new Error('no debería consultar'); }), []);
+});
+
+test('pistola de código de barras: código exacto en los códigos de barras de las variantes o en el código interno', async () => {
+  assert.equal(limpiarCodigo(' 7791234567890 '), '7791234567890');
+  assert.equal(limpiarCodigo('BZ-169'), 'BZ-169');
+  assert.equal(limpiarCodigo('12'), '');                 // muy corto
+  assert.equal(limpiarCodigo("x' or 1=1"), '');         // caracteres raros
+  assert.deepEqual(dominioCodigo('7791234567890'), [['sale_ok', '=', true], '|',
+    ['product_variant_ids.barcode', '=', '7791234567890'], ['default_code', '=ilike', '7791234567890']]);
+  let cuerpo = null;
+  const r = await buscarPorCodigo('7791234567890', cfg, async (_url, op) => { cuerpo = JSON.parse(op.body); return new Response(JSON.stringify([prod('MOCHILA TRENDY', MOCHILAS)]), { status: 200 }); });
+  assert.deepEqual(cuerpo.domain, dominioCodigo('7791234567890'));
+  assert.equal(r.length, 1);
+  assert.equal(r[0].nombre, 'MOCHILA TRENDY');
+  assert.deepEqual(await buscarPorCodigo('a', cfg, async () => { throw new Error('no tenía que consultar'); }), []);
+});
+
+test('un código de barras escrito a mano (8 números o más) también se busca en los códigos de barras', () => {
+  assert.deepEqual(dominio('77912345').slice(1), ['|', '|', ['name', 'ilike', '77912345'], ['default_code', 'ilike', '77912345'], ['product_variant_ids.barcode', 'ilike', '77912345']]);
+  assert.deepEqual(dominio('317000').slice(1), ['|', ['name', 'ilike', '317000'], ['default_code', 'ilike', '317000']]);
 });
 
 test('Odoo real (solo con ODOO_PRUEBA_CLAVE)', { skip: !process.env.ODOO_PRUEBA_CLAVE && 'sin ODOO_PRUEBA_CLAVE' }, async () => {

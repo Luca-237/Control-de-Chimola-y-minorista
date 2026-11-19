@@ -62,13 +62,13 @@
   function crear(cont, { inicial = {}, alElegir, alLibre, alCambiar } = {}) {
     const id = 'bp' + (++contador);
     const memoria = new Map();
-    let temporizador = null, control = null, resultados = [], activo = -1, ultimaBusqueda = '', error = '';
+    let temporizador = null, control = null, resultados = [], activo = -1, ultimaBusqueda = '', error = '', avisoVacio = '';
 
     cont.innerHTML = `<div class="bp">
       <div class="bp-elegido" hidden></div>
       <div class="bp-buscar">
         <input type="text" class="bp-input" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}-lista" aria-label="Producto"
-          autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="Escribí el producto (ej. mochila, cartuchera trendy)">
+          autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="Escribí el producto o pasá la pistola de códigos">
         <span class="bp-cargando" hidden aria-hidden="true"></span>
         <ul class="bp-lista" id="${id}-lista" role="listbox" hidden></ul>
       </div>
@@ -100,7 +100,7 @@
           <span class="bp-nombre">${resaltado(r.nombre, q)}${r.con_stock === false ? ' <em class="bp-sin">Sin stock</em>' : r.publicado === false ? ' <em class="bp-sin">Sin publicar</em>' : ''}</span>
           <small>${esc([r.ruta || r.categoria || '', (r.codigos || []).length ? 'cód. ' + r.codigos[0] + (r.cantidad > 1 ? ` y ${r.cantidad - 1} más` : '') : '', typeof r.stock === 'number' && r.stock > 0 ? 'stock ' + R.util.fmtNum(r.stock) : ''].filter(Boolean).join(' · '))}</small></li>`).join('');
       const aviso = error ? `<li class="bp-aviso" role="presentation">${esc(error)}</li>`
-        : !resultados.length && q.length >= MIN_LETRAS && ultimaBusqueda === q ? `<li class="bp-aviso" role="presentation">No encontramos "${esc(q)}" en Odoo.</li>` : '';
+        : !resultados.length && q.length >= MIN_LETRAS && ultimaBusqueda === q ? `<li class="bp-aviso" role="presentation">${esc(avisoVacio || `No encontramos "${q}" en Odoo.`)}</li>` : '';
       lista.innerHTML = opciones + aviso
         + `<li role="option" id="${id}-libre" data-libre aria-selected="${activo === resultados.length}" class="bp-libre"><span class="bp-nombre">Cargar este producto tal como está: <strong>${esc(q)}</strong></span><small>No está en el catálogo: se guarda con ese nombre</small></li>`;
       lista.hidden = false;
@@ -113,6 +113,7 @@
     async function buscar(q) {
       ultimaBusqueda = q;
       error = '';
+      avisoVacio = '';
       if (control) control.abort();
       if (memoria.has(q)) { resultados = memoria.get(q); activo = -1; pintarLista(); return; }
       control = new AbortController();
@@ -197,7 +198,23 @@
     });
 
     pintarElegido();
-    return { enfocar: () => input.focus(), caja };
+    // Muestra un código leído con la pistola que no encontró un único producto: la lista para elegir
+    // (si hubo varios) o el aviso de que no está, con la opción de cargarlo tal como está
+    function mostrar(texto, lista_, aviso = '') {
+      clearTimeout(temporizador);
+      if (control) control.abort();
+      cargando.hidden = true;
+      input.value = texto;
+      ultimaBusqueda = texto.trim();
+      resultados = lista_ || [];
+      error = '';
+      avisoVacio = aviso;
+      activo = resultados.length ? 0 : -1;
+      input.focus();
+      pintarLista();
+    }
+
+    return { enfocar: () => input.focus(), mostrar, caja };
   }
 
   R.buscadorProducto = { crear, partesResaltadas, quitarTildes };

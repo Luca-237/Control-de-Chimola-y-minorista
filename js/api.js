@@ -179,12 +179,21 @@
     async buscar(q, { limite = 8, senal } = {}) {
       q = String(q || "").trim();
       if (q.length < 2) return [];
+      return productos.pedir({ q, limite }, senal);
+    },
+    // Lo leído con la pistola de código de barras: búsqueda exacta por código de barras o código interno
+    async porCodigo(codigo, { senal } = {}) {
+      codigo = String(codigo || "").replace(/\s+/g, "");
+      if (codigo.length < 3) return [];
+      return productos.pedir({ codigo }, senal);
+    },
+    async pedir(cuerpo, senal) {
       const c = window.CMC_CONFIG, token = await tokenSesion();
       if (!token) throw new Error("La sesión venció. Volvé a ingresar.");
       let r;
       try {
         r = await fetch(c.supabaseUrl.replace(/\/+$/, "") + "/functions/v1/" + (c.funcionBuscarProductos || "buscar-productos"), {
-          method: "POST", signal: senal, body: JSON.stringify({ q, limite }),
+          method: "POST", signal: senal, body: JSON.stringify(cuerpo),
           headers: { Authorization: "Bearer " + token, apikey: c.supabaseKey, "Content-Type": "application/json" },
         });
       } catch (e) {

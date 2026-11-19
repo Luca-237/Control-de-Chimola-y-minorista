@@ -79,9 +79,10 @@
         <div class="campo" data-campo="pago"><label>Forma de pago</label>${pastillas(opcionesDe(localId, "pago", venta.pago_id), venta.pago_id, "pago")}</div>
         <div class="total-venta"><span>Total de la venta</span><strong data-total>${fmtPesos(0)}</strong></div>`;
       // El buscador de cada artículo; lo elegido queda guardado en el propio artículo (it)
+      buscadores = [];
       cont.querySelectorAll(".articulo").forEach(a => {
         const i = Number(a.dataset.i), it = items[i];
-        R.buscadorProducto.crear(a.querySelector("[data-buscador]"), {
+        buscadores[i] = R.buscadorProducto.crear(a.querySelector("[data-buscador]"), {
           inicial: it,
           alElegir: () => { it.rubro_id = null; it.marca_id = null; redibujar(i, "[data-cant]"); },
           // Lo que se había escrito en el buscador queda como nombre del producto
@@ -147,6 +148,49 @@
       const n = leerMonto(e.target.value);
       if (n != null) e.target.value = R.util.fmtNum(n, 2);
     });
+
+    // ---------- Pistola de código de barras ----------
+    // Un código leído va al artículo donde estaba el cursor (si todavía no tiene producto), o al primero vacío,
+    // o a uno nuevo. Si el producto ya estaba cargado, suma una unidad.
+    let buscadores = [];
+    const vacio = k => !items[k].modo && !(cont.querySelector(`.articulo[data-i="${k}"] .bp-input`)?.value || "").trim();
+    function destino(el) {
+      const a = el && el.closest ? el.closest(".articulo") : null;
+      if (a && el.matches(".bp-input") && !items[Number(a.dataset.i)].modo) return Number(a.dataset.i);
+      const k = items.findIndex((_, n) => vacio(n));
+      if (k >= 0) return k;
+      items.push({ cantidad: 1, modo: null });
+      return items.length - 1;
+    }
+    // Ya se leyó la pantalla antes de cambiar el artículo: se dibuja sin volver a leerla (si no, pisaría la cantidad)
+    const mostrarEn = k => { dibujar(); cont.querySelector(`.articulo[data-i="${k}"] [data-monto]`)?.focus(); };
+    async function alLeerCodigo(codigo, el) {
+      if (!codigo || !cont.querySelector(".articulo")) return;
+      let r;
+      try { r = await R.api.productos.porCodigo(codigo); }
+      catch (e) { R.util.toast("No se pudo buscar el código: " + e.message, "error", 6000); return; }
+      leerPantalla();
+      if (r.length === 1) {
+        const p = r[0];
+        const ya = items.findIndex(it => it.modo === "catalogo" && it.producto_clave === p.clave);
+        if (ya >= 0) {
+          items[ya].cantidad = (Number(items[ya].cantidad) || 1) + 1;
+          mostrarEn(ya);
+          R.util.toast(`Otra unidad de ${p.nombre}: ya son ${items[ya].cantidad}. Revisá el monto.`);
+          return;
+        }
+        const k = destino(el);
+        Object.assign(items[k], { modo: "catalogo", producto: p.nombre, producto_clave: p.clave, categoria: p.categoria,
+          categoria_ruta: p.ruta, categoria_tn_id: p.categoria_id, rubro_id: null, marca_id: null, cantidad: items[k].cantidad || 1 });
+        mostrarEn(k);
+        return;
+      }
+      // Ninguno o varios: queda el código en el buscador para elegir, o para cargarlo tal como está
+      const k = destino(el);
+      dibujar();
+      buscadores[k]?.mostrar(codigo, r, r.length ? "" : `No hay ningún producto con el código ${codigo} en Odoo.`);
+    }
+    if (R.lectorCodigos) R.lectorCodigos.registrar(cont, alLeerCodigo);
 
     dibujar();
 

@@ -124,6 +124,10 @@ Anular una consulta ya no pide motivo: un toque para confirmar ("¿Anular esta c
 
 Nada de lo que se completa sobre el cliente frena la carga: nombre, usuario y nro. telefónico son opcionales, también en "Lo piensa" (si no hay ningún dato, la tarjeta dice "Sin datos del cliente"). En una venta, si no se elige nada del buscador, el artículo se guarda fuera del catálogo con lo que se haya escrito (o sin nombre) y en las estadísticas de categorías cuenta como "Otros". Correr en el SQL Editor `supabase/migrations/20261119100000_datos_opcionales.sql` (se puede volver a correr). Sin esta migración, la página nueva puede dar "falta un dato del cliente" o "Falta el nombre del producto".
 
+## 12. Pistola de código de barras (función buscar-productos)
+
+En "Cargar venta" se puede pasar la pistola (lector USB o Bluetooth) con el cursor en cualquier casilla del formulario, o sin cursor: el producto se elige solo, el cursor queda en el monto y, si ese producto ya estaba, suma una unidad. Si el código no está en Odoo (o hay varios), queda escrito en el buscador para elegir o cargarlo tal como está. Para eso hay que volver a publicar la función `buscar-productos` con el `index.ts` actual (Edge Functions → buscar-productos → Code → pegar → Deploy; "Verify JWT" sigue apagado). Busca el código exacto en el código de barras de las variantes de Odoo (`product_variant_ids.barcode`) o en el código interno (`default_code`). No hace falta migración.
+
 ## Borrar todas las consultas (mantenimiento, no es migración)
 
 `supabase/mantenimiento/borrar-todas-las-consultas.sql` deja la base de consultas vacía para arrancar en limpio después de las pruebas: borra todas las consultas, sus artículos y el historial, y la numeración vuelve a 1. No toca usuarios, perfiles, locales, listas, empleados ni configuración. **Es definitivo.** Se corre una sola vez, a mano, en el SQL Editor (no va en `supabase/migrations`, porque las migraciones se vuelven a correr al armar una base nueva y en las pruebas).

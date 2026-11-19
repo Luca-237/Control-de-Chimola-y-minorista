@@ -9,6 +9,8 @@
 //  (un código por color) en la misma categoría, sale una con su stock sumado.
 //
 //  POST { q: "mochila tren", limite: 8 }   (q desde 2 letras; limite 1 a 20, por defecto 8)
+//  POST { codigo: "7791234567890" }        lo leído con la pistola de código de barras: busca ese código EXACTO
+//                                          en el código de barras de las variantes o en el código interno.
 //  Para cualquier usuario activo (admin, carga o consulta).
 //  Responde { resultados: [{ clave, nombre, categoria, ruta, categoria_id, cantidad, codigos, stock, con_stock, publicado, imagen }] }
 //    clave       nombre normalizado + categoría (identifica al grupo, sirve para estadísticas)
@@ -17,6 +19,7 @@
 //    stock       suma del stock disponible; con_stock = stock > 0 (se muestran igual los que no tienen)
 //  Busca cada palabra en el nombre (o en el código interno), sin importar el orden: "trendy mochila" encuentra
 //  "MOCHILA TRENDY". Primero los que empiezan con lo escrito. Solo productos activos y que se pueden vender.
+//  Si una palabra son 8 números o más (un código de barras escrito a mano), también se busca en los códigos de barras.
 //
 //  Este archivo es independiente (no importa nada de otras funciones) para poder pegarlo tal cual en el
 //  editor de Supabase.
@@ -59,9 +62,22 @@ export const palabras = (q: string): string[] =>
 // empiezaCon = true: además el nombre tiene que empezar con lo escrito (para mostrar esos primero).
 export function dominio(q: string, empiezaCon = false): unknown[] {
   const d: unknown[] = [["sale_ok", "=", true]];
-  for (const p of palabras(q)) d.push("|", ["name", "ilike", p], ["default_code", "ilike", p]);
+  for (const p of palabras(q)) {
+    if (/^\d{8,}$/.test(p)) d.push("|", "|", ["name", "ilike", p], ["default_code", "ilike", p], ["product_variant_ids.barcode", "ilike", p]);
+    else d.push("|", ["name", "ilike", p], ["default_code", "ilike", p]);
+  }
   if (empiezaCon) d.push(["name", "=ilike", String(q).trim().replace(/[%_]/g, " ").replace(/\s+/g, "%") + "%"]);
   return d;
+}
+
+// Código leído con la pistola: sin espacios, de 3 a 40 caracteres (letras, números, guiones, puntos o barras)
+export const limpiarCodigo = (c: unknown): string => {
+  const s = String(c ?? "").replace(/\s+/g, "").slice(0, 40);
+  return /^[A-Za-z0-9._\/-]{3,40}$/.test(s) ? s : "";
+};
+// Filtro de Odoo para un código exacto: el código de barras de alguna variante o el código interno
+export function dominioCodigo(codigo: string): unknown[] {
+  return [["sale_ok", "=", true], "|", ["product_variant_ids.barcode", "=", codigo], ["default_code", "=ilike", codigo]];
 }
 
 const categoriaDe = (p: ProductoOdoo) => (Array.isArray(p.categ_id) ? { id: p.categ_id[0], nombre: String(p.categ_id[1] || "Sin categoría") } : { id: null, nombre: "Sin categoría" });
@@ -132,6 +148,13 @@ export async function buscarProductos(q: string, limite: number, cfg: ConfigOdoo
   return agrupar([...primeros, ...resto.filter((p) => !vistos.has(p.id))], q, limite);
 }
 
+// Lo leído con la pistola: los productos con ese código exacto, agrupados igual que en la búsqueda por nombre
+export async function buscarPorCodigo(codigo: string, cfg: ConfigOdoo, pedir: typeof fetch = fetch): Promise<Resultado[]> {
+  const c = limpiarCodigo(codigo);
+  if (!c) return [];
+  return agrupar(await consultarOdoo(dominioCodigo(c), cfg, pedir), "", LIMITE_DEFECTO);
+}
+
 // ---------- Servidor (solo en Supabase; en la PC se importan las funciones de arriba para probarlas) ----------
 const respuesta = (cuerpo: unknown, status = 200) =>
   new Response(JSON.stringify(cuerpo), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -168,6 +191,18 @@ if (D && D.serve) {
       if (!yo.activo) return respuesta({ error: "No tenés permiso para buscar productos" }, 403);
 
       const body = await req.json().catch(() => ({}));
+      // Código de barras (pistola): búsqueda exacta
+      if (body.codigo != null) {
+        const codigo = limpiarCodigo(body.codigo);
+        if (!codigo) return respuesta({ resultados: [] });
+        const kc = "codigo|" + codigo;
+        const enCache = cache.get(kc);
+        if (enCache && enCache.hasta > Date.now()) return respuesta({ resultados: enCache.datos, cache: true });
+        const datos = await buscarPorCodigo(codigo, { url: odooUrl, clave });
+        if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
+        cache.set(kc, { hasta: Date.now() + CACHE_SEGUNDOS * 1000, datos });
+        return respuesta({ resultados: datos });
+      }
       const q = String(body.q ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_LETRAS);
       const limite = Math.min(Math.max(Math.floor(Number(body.limite)) || LIMITE_DEFECTO, 1), LIMITE_MAX);
       if (q.length < MIN_LETRAS) return respuesta({ resultados: [] });
