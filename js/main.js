@@ -113,15 +113,37 @@
     VISTAS[nombre].v().mostrar();
   }
 
-  async function entrar() {
+  // Si la base o la cuenta Cindy no contestan, no se queda la pantalla de carga para siempre
+  const ESPERA_INGRESO_MS = 20000;
+  const conLimite = (promesa, mensaje) => Promise.race([promesa,
+    new Promise((_, mal) => setTimeout(() => mal(new Error(mensaje)), ESPERA_INGRESO_MS))]);
+  // Vuelve al login con el error a la vista
+  function alLogin(mensaje) {
+    R.estado.perfil = null;
+    R.vistaAcceso.mostrarCindy();
+    R.vistaAcceso.mostrar("pantalla-login");
+    R.vistaAcceso.errorLogin(mensaje);
+  }
+
+  // Un solo ingreso a la vez (el login, la cuenta Cindy y el aviso de Clerk pueden pedirlo juntos)
+  let entrando = null;
+  function entrar() {
+    if (!entrando) entrando = entrarAhora().catch(e => alLogin(e.message)).finally(() => { entrando = null; });
+    return entrando;
+  }
+
+  async function entrarAhora() {
     R.vistaAcceso.mostrar("pantalla-carga");
-    let perfil;
-    try { perfil = await R.api.auth.miPerfil(); }
-    catch (e) { R.vistaAcceso.mostrarCindy(); R.vistaAcceso.mostrar("pantalla-login"); return R.vistaAcceso.errorLogin(e.message); }
     const cindy = R.api.auth.via && R.api.auth.via() === "clerk";
+    const sinRespuesta = cindy
+      ? "La cuenta Cindy no respondió a tiempo. Probá de nuevo, o entrá con tu usuario de siempre."
+      : "La base de datos no respondió a tiempo. Revisá internet y probá de nuevo.";
+    let perfil;
+    try { perfil = await conLimite(R.api.auth.miPerfil(), sinRespuesta); }
+    catch (e) { return alLogin(e.message); }
     if (!perfil || !perfil.activo) {
       // Cuenta Cindy sin habilitar acá pero con sesión del login propio: usar esa
-      if (cindy && await R.api.auth.sesion({ ignorarClerk: true })) return entrar();
+      if (cindy && await R.api.auth.sesion({ ignorarClerk: true })) return entrarAhora();
       // La cuenta Cindy no se cierra: le sirve en las otras apps
       if (!cindy) await R.api.auth.salir();
       R.vistaAcceso.mostrarCindy();
@@ -131,13 +153,11 @@
         : "Tu usuario no está habilitado. Hablá con un admin.");
     }
     R.estado.perfil = perfil;
-    try { R.estado.catalogo = await R.api.catalogo(perfil); }
-    catch (e) { R.vistaAcceso.mostrar("pantalla-login"); return R.vistaAcceso.errorLogin(e.message); }
+    try { R.estado.catalogo = await conLimite(R.api.catalogo(perfil), sinRespuesta); }
+    catch (e) { return alLogin(e.message); }
     if (perfil.rol === "carga" && !R.estado.catalogo.misLocales.length) {
       if (!cindy) await R.api.auth.salir();
-      R.vistaAcceso.mostrarCindy();
-      R.vistaAcceso.mostrar("pantalla-login");
-      return R.vistaAcceso.errorLogin("Tu usuario no tiene ningún local asignado. Hablá con un admin.");
+      return alLogin("Tu usuario no tiene ningún local asignado. Hablá con un admin.");
     }
     R.estado.verComo = null;
     $("ver-como").value = "";
@@ -152,6 +172,7 @@
 
   async function entrarConCindy() {
     if (await R.api.auth.sesion()) await entrar();
+    else alLogin("No se pudo abrir la cuenta Cindy. Probá de nuevo, o entrá con tu usuario de siempre.");
   }
 
   function salir() {
@@ -234,8 +255,17 @@
     R.api.auth.alCambiar(evento => {
       if (evento === "SIGNED_OUT" && (!R.api.auth.via || R.api.auth.via() !== "clerk")) { salir(); R.vistaAcceso.mostrar("pantalla-login"); }
     });
+    // Al terminar de entrar en el cuadro de Clerk se entra acá también. No se espera a que Clerk recargue la
+    // página: con un "#" en la dirección (#cargar, #tablero…) no recarga y la pantalla quedaba quieta, sin error.
+    // Se intenta una vez por sesión de Clerk (Clerk avisa de nuevo cada vez que renueva el token).
+    let sesionCindyVista = null;
     if (window.CuentaCindy) window.CuentaCindy.alCambiar(({ session }) => {
       R.vistaAcceso.mostrarCindy();
+      if (session && session.id !== sesionCindyVista && !R.estado.perfil && !$("pantalla-login").hidden) {
+        sesionCindyVista = session.id;
+        R.vistaAcceso.errorLogin("");
+        entrarConCindy();
+      }
       if (R.api.auth.via && R.api.auth.via() === "clerk" && !session && R.estado.perfil) { // se cerró desde otra app
         salir();
         R.vistaAcceso.mostrar("pantalla-login");

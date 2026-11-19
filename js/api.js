@@ -46,6 +46,9 @@
     if (/row-level security|permission denied/i.test(m)) return "No tenés permiso para hacer esto.";
     if (/JWT expired/i.test(m)) return "La sesión venció. Volvé a ingresar.";
     if (/No suitable key|wrong key type/i.test(m)) return "La base todavía no acepta la cuenta Cindy. Entrá con tu usuario.";
+    // Token de Clerk rechazado por la base (Clerk sin conectar en Supabase → Third Party Auth, o token vencido)
+    if (via === "clerk" && /PGRST30[0-3]|JWS|JWT|invalid.*token|token.*invalid|unauthorized|signature/i.test(m))
+      return "La base no aceptó la cuenta Cindy. Entrá con tu usuario de siempre y avisale a un admin.";
     if (/opciones_unico|duplicate key.*opciones/i.test(m)) return "Esa opción ya existe en la lista.";
     if (/vendedores_unico|duplicate key.*vendedores/i.test(m)) return "Ya hay un vendedor con ese nombre en el local.";
     if (/locales_nombre_key/i.test(m)) return "Ya hay un local con ese nombre.";
