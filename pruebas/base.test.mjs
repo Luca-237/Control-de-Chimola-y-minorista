@@ -317,3 +317,47 @@ test('catálogo: corregir una venta cambia el producto y los permisos de lectura
   // Chimola no ve los artículos de Cindy Minorista
   assert.equal((await como(U.chimola, 'select 1 from public.venta_items_vista where consulta_id = $1', [id])).length, 0);
 });
+
+test('lista de artículos propia (Chimola): solo un admin la carga; el buscador encuentra por código o nombre y la venta guarda el código', async () => {
+  const ch = L.Chimola;
+  assert.deepEqual((await db.query('select nombre, catalogo from public.locales order by id')).rows.map(r => r.catalogo),
+    (await db.query('select nombre from public.locales order by id')).rows.map(r => (/^chimola/i.test(r.nombre) ? 'propio' : 'odoo')));
+  const filas = [
+    { codigo: 'TX64', nombre: 'Cartera Tejida', rubro: 'Accesorios', temporada: 'DDN26' },
+    { codigo: 'TX65', nombre: 'Cartera  Tejida', rubro: 'Accesorios', temporada: 'DDN26' },
+    { codigo: 'R146', nombre: 'Portacosméticos Travel Detroit', rubro: 'Accesorios', temporada: 'AW26' },
+    { codigo: 'L01-G', nombre: 'VALIJA GRANDE VERMON', rubro: 'Valijas', temporada: 'Summer 2025' },
+    { codigo: '', nombre: 'sin código: se ignora' },
+  ];
+  await assert.rejects(como(U.chimola, 'select public.importar_articulos($1, $2)', [ch, JSON.stringify(filas)]), /Solo un admin/);
+  const r1 = (await como(U.admin, 'select public.importar_articulos($1, $2) as r', [ch, JSON.stringify(filas)]))[0].r;
+  assert.deepEqual(r1, { total: 4, nuevos: 4, actualizados: 0, desactivados: 0 });
+  const buscar = (u, q, exacto = false) => como(u, 'select codigo, nombre from public.buscar_articulos($1, $2, 8, $3)', [ch, q, exacto]);
+  assert.deepEqual((await buscar(U.chimola, 'tx64')).map(f => f.codigo), ['TX64']);
+  assert.deepEqual((await buscar(U.chimola, 'tejida cartera')).map(f => f.codigo), ['TX64', 'TX65']);
+  assert.deepEqual((await buscar(U.chimola, 'portacosmeticos')).map(f => f.codigo), ['R146']);   // sin tilde
+  assert.deepEqual((await buscar(U.chimola, 'tx')).map(f => f.codigo).slice(0, 2), ['TX64', 'TX65']);
+  assert.deepEqual((await buscar(U.chimola, 'l01-g', true)).map(f => f.codigo), ['L01-G']);       // pistola: exacto
+  assert.deepEqual(await buscar(U.chimola, 'L01', true), []);
+  // Cindy Minorista no ve la lista de Chimola
+  assert.deepEqual(await buscar(U.cindy, 'tx64'), []);
+  // Planilla nueva: cambia un nombre, falta TX65 (sale del buscador, no se borra) y hay uno nuevo
+  const r2 = (await como(U.admin, 'select public.importar_articulos($1, $2) as r', [ch, JSON.stringify([
+    { codigo: 'tx64', nombre: 'Cartera Tejida Grande', rubro: 'Accesorios', temporada: 'DDN26' },
+    { codigo: 'R146', nombre: 'Portacosméticos Travel Detroit', rubro: 'Accesorios', temporada: 'AW26' },
+    { codigo: 'L01-G', nombre: 'VALIJA GRANDE VERMON', rubro: 'Valijas', temporada: 'Summer 2025' },
+    { codigo: 'BT256', nombre: 'Llavero dog', rubro: 'Accesorios', temporada: 'Invierno 2025' },
+  ])]))[0].r;
+  assert.deepEqual(r2, { total: 4, nuevos: 1, actualizados: 1, desactivados: 1 });
+  assert.equal((await db.query(`select codigo from public.articulos_local where local_id = $1 and lower(codigo) = 'tx64'`, [ch])).rows[0].codigo, 'TX64');
+  assert.deepEqual(await buscar(U.chimola, 'tx65'), []);
+  assert.equal((await db.query(`select count(*)::int as n from public.articulos_local where local_id = $1`, [ch])).rows[0].n, 5);
+  // La venta guarda el código
+  const co = O.Chimola;
+  const id = await guardar(U.chimola, { local_id: ch, canal_id: Object.values(co.canal)[0], estado: 'compro',
+    envio_id: Object.values(co.envio)[0], pago_id: Object.values(co.pago)[0],
+    items: [{ catalogo: true, producto: 'Cartera Tejida Grande', producto_clave: 'chimola|cartera tejida grande|accesorios', producto_codigo: 'TX64',
+      categoria: 'Accesorios', categoria_ruta: 'Accesorios', cantidad: 1, monto: 18000 }] });
+  const it = (await como(U.chimola, 'select producto, producto_codigo, categoria from public.venta_items_vista where consulta_id = $1', [id]))[0];
+  assert.deepEqual(it, { producto: 'Cartera Tejida Grande', producto_codigo: 'TX64', categoria: 'Accesorios' });
+});

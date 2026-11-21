@@ -53,6 +53,60 @@
     } catch (e) { R.util.toast(e.message, "error", 6000); }
   }
 
+  // ---------- Productos del local: catálogo de Odoo o lista propia (planilla) ----------
+  async function pintarProductos({ conservarError = false } = {}) {
+    const l = R.estado.catalogo.locales.find(x => x.id === cfgLocal());
+    if (!l) return;
+    const propio = l.catalogo === "propio";
+    $("cfg-catalogo").value = propio ? "propio" : "odoo";
+    $("cfg-propio").hidden = !propio;
+    if (!conservarError) $("cfg-articulos-error").textContent = "";
+    if (!propio) return;
+    $("cfg-articulos-estado").textContent = "Contando artículos…";
+    try {
+      const n = await R.api.productos.contar(l.id);
+      if (cfgLocal() !== l.id) return;
+      $("cfg-articulos-estado").textContent = n
+        ? `${R.util.fmtNum(n)} artículos en la lista de ${l.nombre}. El buscador de ventas de ${l.nombre} busca solo acá, por código o nombre.`
+        : `Todavía no hay artículos cargados para ${l.nombre}: subí la planilla para que el buscador los encuentre.`;
+    } catch (e) { $("cfg-articulos-estado").textContent = ""; $("cfg-articulos-error").textContent = e.message; }
+  }
+  async function cambiarCatalogo() {
+    const l = R.estado.catalogo.locales.find(x => x.id === cfgLocal());
+    const catalogo = $("cfg-catalogo").value;
+    try {
+      await R.api.admin.guardarLocal({ ...l, catalogo });
+      await recargarCatalogo();
+      R.util.toast(catalogo === "propio" ? `${l.nombre} ahora busca en su lista propia.` : `${l.nombre} ahora busca en Odoo.`);
+    } catch (e) { R.util.toast(e.message, "error", 6000); }
+    pintarProductos();
+  }
+  async function subirPlanilla(e) {
+    const archivo = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!archivo) return;
+    const l = R.estado.catalogo.locales.find(x => x.id === cfgLocal());
+    $("cfg-articulos-error").textContent = "";
+    $("cfg-articulos-estado").textContent = `Leyendo ${archivo.name}…`;
+    let leido;
+    try { leido = await R.planillaArticulos.leerArchivo(archivo); }
+    catch (err) { $("cfg-articulos-error").textContent = err.message; return pintarProductos({ conservarError: true }); }
+    const extra = [leido.repetidos ? `${leido.repetidos} códigos repetidos (se toma el primero)` : "", leido.sinNombre ? `${leido.sinNombre} filas sin descripción (se saltean)` : ""].filter(Boolean).join(" y ");
+    const ok = await R.util.pedir({
+      titulo: `¿Cargar ${R.util.fmtNum(leido.filas.length)} artículos en ${l.nombre}?`,
+      texto: `Hoja "${leido.hoja}"${extra ? `: ${extra}` : ""}. Por ejemplo: ${leido.filas.slice(0, 3).map(f => `${f.codigo} ${f.nombre}`).join(", ")}.`
+        + ($("cfg-desactivar").checked ? " Los que ya no estén en la planilla dejan de aparecer en el buscador." : ""),
+      boton: "Cargar",
+    });
+    if (ok == null) return pintarProductos();
+    $("cfg-articulos-estado").textContent = "Cargando…";
+    try {
+      const r = await R.api.productos.importar(l.id, leido.filas, { desactivar: $("cfg-desactivar").checked });
+      R.util.toast(`Lista de ${l.nombre} cargada: ${R.util.fmtNum(r.nuevos)} nuevos, ${R.util.fmtNum(r.actualizados)} actualizados${r.desactivados ? `, ${R.util.fmtNum(r.desactivados)} fuera del buscador` : ""}.`, "ok", 8000);
+    } catch (err) { $("cfg-articulos-error").textContent = err.message; return pintarProductos({ conservarError: true }); }
+    pintarProductos();
+  }
+
   // ---------- Listas ----------
   function pintarLista() {
     $("cfg-pestanas").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tipo === pestana)));
@@ -104,13 +158,16 @@
     sel.innerHTML = R.estado.catalogo.locales.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join("");
     sel.value = antes || (R.estado.local ? R.estado.local.id : sel.options[0]?.value);
     pintarLocal();
+    pintarProductos();
     pintarLista();
   }
 
   function iniciar() {
     $("cfg-sugeridos").addEventListener("click", e => { const b = e.target.closest("[data-color]"); if (b) aplicarColor(b.dataset.color); });
     $("cfg-color-propio").addEventListener("input", e => aplicarColor(e.target.value));
-    $("cfg-local").addEventListener("change", () => { pintarLocal(); pintarLista(); });
+    $("cfg-local").addEventListener("change", () => { pintarLocal(); pintarProductos(); pintarLista(); });
+    $("cfg-catalogo").addEventListener("change", cambiarCatalogo);
+    $("cfg-planilla").addEventListener("change", subirPlanilla);
     $("cfg-guardar-local").addEventListener("click", guardarLocal);
     $("cfg-pestanas").innerHTML = TIPOS.map(([k, t]) => `<button type="button" role="tab" data-tipo="${k}">${t}</button>`).join("");
     $("cfg-pestanas").addEventListener("click", e => { const b = e.target.closest("[data-tipo]"); if (b) { pestana = b.dataset.tipo; pintarLista(); } });

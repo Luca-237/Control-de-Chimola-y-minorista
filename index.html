@@ -11,8 +11,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23e84e1b'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='20' fill='%23fff'%3EC%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/app.css?v=20261119.3">
-<script src="js/color.js?v=20261119.3"></script>
+<link rel="stylesheet" href="css/app.css?v=20261121.1">
+<script src="js/color.js?v=20261121.1"></script>
 <script>try { ColorFondo.aplicar(ColorFondo.leer()); } catch (e) {}</script>
 </head>
 <body>
@@ -277,6 +277,22 @@
         <div class="dlg-pie"><button type="button" class="btn-sec primario" id="cfg-guardar-local">Guardar datos del local</button></div>
       </div>
       <div class="caja" data-solo-admin hidden>
+        <h2>Productos del local</h2>
+        <div class="form-grid">
+          <div><label for="cfg-catalogo">De dónde salen los productos al cargar una venta</label>
+            <select id="cfg-catalogo"><option value="odoo">Catálogo de Odoo (el de Cindy)</option><option value="propio">Lista propia del local (planilla de artículos)</option></select></div>
+        </div>
+        <div id="cfg-propio" hidden>
+          <p class="cfg-articulos-estado" id="cfg-articulos-estado"></p>
+          <div class="cfg-subir">
+            <label class="btn-sec primario cfg-subir-btn">Subir planilla de artículos<input type="file" id="cfg-planilla" accept=".xlsx,.xls,.csv" class="sr-only"></label>
+            <label class="interruptor"><input type="checkbox" id="cfg-desactivar" checked><span class="interruptor-pista"></span>Sacar del buscador los que ya no están en la planilla</label>
+          </div>
+          <p class="hint">El Excel de siempre (por ejemplo "BASE DE ARTICULO"): se usan las columnas de código, descripción, rubro y temporada; los precios y las promos no. Los artículos nuevos se agregan y los que cambiaron se actualizan. Los que ya no están no se borran: dejan de aparecer en el buscador.</p>
+          <div class="mensaje-error" id="cfg-articulos-error" role="alert"></div>
+        </div>
+      </div>
+      <div class="caja" data-solo-admin hidden>
         <h2>Listas y vendedores</h2>
         <div class="pestanas" id="cfg-pestanas" role="tablist"></div>
         <ul class="lista-edit" id="cfg-lista"></ul>
@@ -375,21 +391,22 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
-<script src="js/config.js?v=20261119.3"></script>
-<script src="js/utils.js?v=20261119.3"></script>
-<script src="js/medidas.js?v=20261119.3"></script>
-<script src="js/graficos.js?v=20261119.3"></script>
-<script src="js/cuenta-cindy.js?v=20261119.3"></script>
-<script src="js/api.js?v=20261119.3"></script>
-<script src="js/vistas/acceso.js?v=20261119.3"></script>
-<script src="js/buscador-producto.js?v=20261119.3"></script>
-<script src="js/lector-codigos.js?v=20261119.3"></script>
-<script src="js/vistas/venta.js?v=20261119.3"></script>
-<script src="js/vistas/cargar.js?v=20261119.3"></script>
-<script src="js/vistas/abiertos.js?v=20261119.3"></script>
-<script src="js/vistas/tablero.js?v=20261119.3"></script>
-<script src="js/vistas/planilla.js?v=20261119.3"></script>
-<script src="js/vistas/configuracion.js?v=20261119.3"></script>
-<script src="js/main.js?v=20261119.3"></script>
+<script src="js/config.js?v=20261121.1"></script>
+<script src="js/utils.js?v=20261121.1"></script>
+<script src="js/medidas.js?v=20261121.1"></script>
+<script src="js/graficos.js?v=20261121.1"></script>
+<script src="js/cuenta-cindy.js?v=20261121.1"></script>
+<script src="js/api.js?v=20261121.1"></script>
+<script src="js/vistas/acceso.js?v=20261121.1"></script>
+<script src="js/buscador-producto.js?v=20261121.1"></script>
+<script src="js/planilla-articulos.js?v=20261121.1"></script>
+<script src="js/lector-codigos.js?v=20261121.1"></script>
+<script src="js/vistas/venta.js?v=20261121.1"></script>
+<script src="js/vistas/cargar.js?v=20261121.1"></script>
+<script src="js/vistas/abiertos.js?v=20261121.1"></script>
+<script src="js/vistas/tablero.js?v=20261121.1"></script>
+<script src="js/vistas/planilla.js?v=20261121.1"></script>
+<script src="js/vistas/configuracion.js?v=20261121.1"></script>
+<script src="js/main.js?v=20261121.1"></script>
 </body>
 </html>

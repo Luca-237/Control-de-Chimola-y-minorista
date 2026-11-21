@@ -837,3 +837,9 @@ a.web-chip:hover { text-decoration:underline; }
 .salir-cindy[hidden], .via[hidden] { display:none; }
 .via { display:inline-block; margin-left:6px; padding:2px 7px; border:1px solid var(--linea-fuerte); border-radius:999px; font-size:10.5px; color:var(--muted); }
 .chip-login { display:inline-block; margin:3px 4px 0 0; padding:1px 7px; border:1px solid var(--linea-fuerte); border-radius:999px; font-size:10.5px; color:var(--muted); font-weight:400; }
+
+/* ---------- Productos del local (lista propia de artículos) ---------- */
+.cfg-articulos-estado { margin:4px 0 12px; font-size:14px; }
+.cfg-subir { display:flex; flex-wrap:wrap; align-items:center; gap:10px 20px; }
+.cfg-subir-btn { cursor:pointer; }
+.cfg-subir-btn:focus-within { outline:2px solid var(--naranja); outline-offset:2px; }

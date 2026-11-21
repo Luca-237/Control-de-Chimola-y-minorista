@@ -59,8 +59,12 @@
   //   alElegir  (resultado)  se eligió un producto de la lista
   //   alLibre   (texto)      se eligió cargarlo fuera del catálogo (texto = lo que se había escrito)
   //   alCambiar ()           se tocó "Cambiar" (vuelve a buscar)
-  function crear(cont, { inicial = {}, alElegir, alLibre, alCambiar } = {}) {
+  //   localId   local de la venta: si tiene lista propia (Chimola) busca ahí, si no en Odoo
+  function crear(cont, { inicial = {}, alElegir, alLibre, alCambiar, localId } = {}) {
     const id = 'bp' + (++contador);
+    const local = ((R.estado.catalogo && R.estado.catalogo.locales) || []).find(l => l.id === localId);
+    const propio = !!(local && local.catalogo === 'propio');
+    const dondeBusca = propio ? `en la lista de ${local.nombre}` : 'en Odoo';
     const memoria = new Map();
     let temporizador = null, control = null, resultados = [], activo = -1, ultimaBusqueda = '', error = '', avisoVacio = '';
 
@@ -68,7 +72,7 @@
       <div class="bp-elegido" hidden></div>
       <div class="bp-buscar">
         <input type="text" class="bp-input" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}-lista" aria-label="Producto"
-          autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="Escribí el producto o pasá la pistola de códigos">
+          autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="60" placeholder="${propio ? 'Escribí el código o el nombre (ej. TX64, cartera), o pasá la pistola' : 'Escribí el producto o pasá la pistola de códigos'}">
         <span class="bp-cargando" hidden aria-hidden="true"></span>
         <ul class="bp-lista" id="${id}-lista" role="listbox" hidden></ul>
       </div>
@@ -81,7 +85,7 @@
       elegidoEl.hidden = !modo;
       buscarEl.hidden = !!modo;
       if (modo === 'catalogo') {
-        elegidoEl.innerHTML = `<span class="bp-ico">${ICONOS.compro}</span><span class="bp-texto"><strong>${esc(inicial.producto)}</strong><small>${esc(inicial.categoria_ruta || inicial.categoria || '')}</small></span><button type="button" class="link" data-cambiar>Cambiar</button>`;
+        elegidoEl.innerHTML = `<span class="bp-ico">${ICONOS.compro}</span><span class="bp-texto"><strong>${esc(inicial.producto)}</strong><small>${esc([inicial.categoria_ruta || inicial.categoria || '', inicial.producto_codigo ? 'cód. ' + inicial.producto_codigo : ''].filter(Boolean).join(' · '))}</small></span><button type="button" class="link" data-cambiar>Cambiar</button>`;
       } else if (modo === 'libre') {
         elegidoEl.innerHTML = `<span class="bp-texto"><strong>Tal como está (fuera del catálogo)</strong><small>Se guarda con el nombre de abajo</small></span><button type="button" class="link" data-cambiar>Buscar en el catálogo</button>`;
       }
@@ -100,7 +104,7 @@
           <span class="bp-nombre">${resaltado(r.nombre, q)}${r.con_stock === false ? ' <em class="bp-sin">Sin stock</em>' : r.publicado === false ? ' <em class="bp-sin">Sin publicar</em>' : ''}</span>
           <small>${esc([r.ruta || r.categoria || '', (r.codigos || []).length ? 'cód. ' + r.codigos[0] + (r.cantidad > 1 ? ` y ${r.cantidad - 1} más` : '') : '', typeof r.stock === 'number' && r.stock > 0 ? 'stock ' + R.util.fmtNum(r.stock) : ''].filter(Boolean).join(' · '))}</small></li>`).join('');
       const aviso = error ? `<li class="bp-aviso" role="presentation">${esc(error)}</li>`
-        : !resultados.length && q.length >= MIN_LETRAS && ultimaBusqueda === q ? `<li class="bp-aviso" role="presentation">${esc(avisoVacio || `No encontramos "${q}" en Odoo.`)}</li>` : '';
+        : !resultados.length && q.length >= MIN_LETRAS && ultimaBusqueda === q ? `<li class="bp-aviso" role="presentation">${esc(avisoVacio || `No encontramos "${q}" ${dondeBusca}.`)}</li>` : '';
       lista.innerHTML = opciones + aviso
         + `<li role="option" id="${id}-libre" data-libre aria-selected="${activo === resultados.length}" class="bp-libre"><span class="bp-nombre">Cargar este producto tal como está: <strong>${esc(q)}</strong></span><small>No está en el catálogo: se guarda con ese nombre</small></li>`;
       lista.hidden = false;
@@ -119,7 +123,7 @@
       control = new AbortController();
       cargando.hidden = false;
       try {
-        const r = await R.api.productos.buscar(q, { limite: LIMITE, senal: control.signal });
+        const r = await R.api.productos.buscar(q, { limite: LIMITE, senal: control.signal, localId });
         memoria.set(q, r);
         if (q !== ultimaBusqueda) return;
         resultados = r;
@@ -146,7 +150,7 @@
       if (!r) return;
       clearTimeout(temporizador);
       cerrar();
-      Object.assign(inicial, { modo: 'catalogo', producto: r.nombre, producto_clave: r.clave, categoria: r.categoria, categoria_ruta: r.ruta, categoria_tn_id: r.categoria_id });
+      Object.assign(inicial, { modo: 'catalogo', producto: r.nombre, producto_clave: r.clave, producto_codigo: r.codigo || '', categoria: r.categoria, categoria_ruta: r.ruta, categoria_tn_id: r.categoria_id });
       pintarElegido();
       if (alElegir) alElegir(r);
     }

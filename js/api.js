@@ -178,17 +178,35 @@
   // Un resultado por nombre + categoría: [{ clave, nombre, categoria, ruta, categoria_id, cantidad, publicado, imagen }].
   // La clave de la tienda vive en la función; acá solo viaja la sesión. "senal" (AbortController.signal) cancela la
   // consulta anterior cuando se sigue escribiendo.
+  // Locales con lista de artículos propia (Chimola) buscan en la base (buscar_articulos), no en Odoo
+  const esPropio = localId => !!localId && ((R.estado.catalogo && R.estado.catalogo.locales) || []).some(l => l.id === localId && l.catalogo === "propio");
+  async function buscarPropio(localId, q, limite, exacto) {
+    const filas = chequear(await sb.rpc("buscar_articulos", { p_local: localId, p_q: q, p_limite: limite, p_exacto: exacto }));
+    return (filas || []).map(f => R.articuloPropio(f, localId));
+  }
   const productos = {
-    async buscar(q, { limite = 8, senal } = {}) {
+    async buscar(q, { limite = 8, senal, localId } = {}) {
       q = String(q || "").trim();
+      if (esPropio(localId)) return q.length < 1 ? [] : buscarPropio(localId, q, limite, false);
       if (q.length < 2) return [];
       return productos.pedir({ q, limite }, senal);
     },
     // Lo leído con la pistola de código de barras: búsqueda exacta por código de barras o código interno
-    async porCodigo(codigo, { senal } = {}) {
+    async porCodigo(codigo, { senal, localId } = {}) {
       codigo = String(codigo || "").replace(/\s+/g, "");
+      if (esPropio(localId)) return codigo ? buscarPropio(localId, codigo, 8, true) : [];
       if (codigo.length < 3) return [];
       return productos.pedir({ codigo }, senal);
+    },
+    // Cuántos artículos activos tiene la lista propia de un local
+    async contar(localId) {
+      const { count, error } = await sb.from("articulos_local").select("codigo", { count: "exact", head: true }).eq("local_id", localId).eq("activo", true);
+      if (error) throw new Error(mensaje(error));
+      return count || 0;
+    },
+    // Carga la planilla de artículos de un local (solo admin): [{ codigo, nombre, rubro, temporada }]
+    async importar(localId, filas, { desactivar = true } = {}) {
+      return chequear(await sb.rpc("importar_articulos", { p_local: localId, p_filas: filas, p_desactivar: desactivar }));
     },
     async pedir(cuerpo, senal) {
       const c = window.CMC_CONFIG, token = await tokenSesion();
@@ -267,6 +285,7 @@
     async guardarLocal(l) {
       const datos = { nombre: l.nombre, color: l.color, dias_lo_piensa: l.dias_lo_piensa, horas_edicion: l.horas_edicion,
         dias_carga_atrasada: l.dias_carga_atrasada, activo: l.activo };
+      if (l.catalogo) datos.catalogo = l.catalogo;
       if (l.id) return chequear(await sb.from("locales").update(datos).eq("id", l.id).select().single());
       return chequear(await sb.from("locales").insert(datos).select().single());
     },
@@ -287,4 +306,15 @@
   };
 
   R.api = { configurado, iniciar, auth, catalogo, consultas, items, itemsDe, abiertos, recientes, delDia, productos, guardar, cerrar, anular, admin };
+
+  // Un artículo de la lista propia de un local, con la misma forma que un resultado de Odoo.
+  // clave = nombre + rubro (como Odoo agrupa los colores): "Cartera Tejida" TX64 y TX65 suman juntas en el tablero;
+  // el código de cada uno queda guardado aparte (producto_codigo).
+  const plano = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const rubroLindo = s => { s = String(s || "").replace(/\s+/g, " ").trim(); return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : "Sin rubro"; };
+  R.articuloPropio = (f, localId) => {
+    const nombre = String(f.nombre || "").replace(/\s+/g, " ").trim(), rubro = rubroLindo(f.rubro);
+    return { clave: `propio|${localId}|${plano(nombre)}|${plano(rubro)}`, nombre, categoria: rubro, ruta: rubro, categoria_id: null,
+      codigo: f.codigo, codigos: [f.codigo], cantidad: 1, publicado: true, imagen: "", temporada: f.temporada || "" };
+  };
 })(window.CMC);

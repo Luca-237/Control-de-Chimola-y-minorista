@@ -13,8 +13,8 @@
   const pesado = pares => { const t = pares.reduce((s, p) => s + p[1], 0); let r = azar() * t; for (const [v, w] of pares) { if ((r -= w) < 0) return v; } return pares[0][0]; };
 
   const locales = [
-    { id: 1, nombre: "Cindy Minorista", color: "#e84e1b", logo_url: "", dias_lo_piensa: 15, horas_edicion: 48, dias_carga_atrasada: 7, activo: true },
-    { id: 2, nombre: "Chimola", color: "#8a5cc2", logo_url: "", dias_lo_piensa: 15, horas_edicion: 48, dias_carga_atrasada: 7, activo: true },
+    { id: 1, nombre: "Cindy Minorista", color: "#e84e1b", logo_url: "", dias_lo_piensa: 15, horas_edicion: 48, dias_carga_atrasada: 7, activo: true, catalogo: "odoo" },
+    { id: 2, nombre: "Chimola", color: "#8a5cc2", logo_url: "", dias_lo_piensa: 15, horas_edicion: 48, dias_carga_atrasada: 7, activo: true, catalogo: "propio" },
   ];
   let idOp = 1;
   const opciones = [];
@@ -77,6 +77,24 @@
       // Como Odoo: códigos de ejemplo y stock (los "no publicados" de antes hacen de "sin stock")
       codigos: [String(317000 + CATALOGO.indexOf(c) * 7)], stock: c[2] ? 3 + (CATALOGO.indexOf(c) * 13) % 90 : 0, con_stock: !!c[2], publicado: true };
   };
+
+  // ---------- Lista de artículos propia de Chimola (de ejemplo; la real se sube desde Configuración) ----------
+  const articulosLocal = [
+    ["TX64", "Cartera Tejida", "Accesorios", "DDN26"], ["TX65", "Cartera Tejida", "Accesorios", "DDN26"], ["BT256", "Llavero dog", "Accesorios", "Invierno 2025"],
+    ["BT257", "Llavero cat", "Accesorios", "Invierno 2025"], ["R146", "Portacosméticos Travel Detroit", "Accesorios", "AW26"], ["L01-G", "VALIJA GRANDE VERMON", "Valijas", "Summer 2025"],
+    ["BZ107", "VASO ACRILICO SPARK", "Vasos", "BTS26"], ["B265", "Billetera Ana", "Billeteras", "DDN25"], ["CB111", "Bandolera Maia", "Bandoleras", "AW26"],
+    ["SW19", "Buzo Leia", "Buzos", "SS 2026 Indumentaria"], ["PC01", "Paraguas CH", "Accesorios", "AW23"], ["M210", "Mochila Bunny", "Mochilas", "BTS26"],
+  ].map(([codigo, nombre, rubro, temporada]) => ({ local_id: 2, codigo, nombre, rubro, temporada, activo: true }));
+  const esPropio = id => locales.some(l => l.id === id && l.catalogo === "propio");
+  const plano = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  async function buscarPropio(localId, q, limite, exacto) {
+    await new Promise(ok => setTimeout(ok, 150));
+    const t = plano(String(q || "").trim()); if (!t) return [];
+    const palabras = t.split(/s+/);
+    return articulosLocal.filter(a => a.local_id === localId && a.activo && (exacto ? a.codigo.toLowerCase() === t : palabras.every(w => plano(a.nombre + " " + a.codigo + " " + a.rubro).includes(w))))
+      .sort((a, b) => Number(b.codigo.toLowerCase() === t) - Number(a.codigo.toLowerCase() === t) || Number(b.codigo.toLowerCase().startsWith(t)) - Number(a.codigo.toLowerCase().startsWith(t)) || a.nombre.localeCompare(b.nombre))
+      .slice(0, limite).map(a => R.articuloPropio(a, localId));
+  }
 
   // ---------- Consultas inventadas ----------
   const consultas = [], items = [];
@@ -181,7 +199,7 @@
   }
   function ponerItems(id, lista) {
     for (let k = items.length - 1; k >= 0; k--) if (items[k].consulta_id === id) items.splice(k, 1);
-    (lista || []).forEach(it => items.push({ id: idI++, consulta_id: id, catalogo: !!it.catalogo, producto: it.catalogo ? it.producto : "", producto_clave: it.catalogo ? it.producto_clave : "", categoria: it.catalogo ? it.categoria : "",
+    (lista || []).forEach(it => items.push({ id: idI++, consulta_id: id, catalogo: !!it.catalogo, producto: it.catalogo ? it.producto : "", producto_clave: it.catalogo ? it.producto_clave : "", producto_codigo: it.catalogo ? (it.producto_codigo || "") : "", categoria: it.catalogo ? it.categoria : "",
       categoria_ruta: it.catalogo ? it.categoria_ruta : "", categoria_tn_id: it.catalogo ? (it.categoria_tn_id || null) : null, rubro_id: it.rubro_id ? Number(it.rubro_id) : null, marca_id: it.marca_id ? Number(it.marca_id) : null, descripcion: it.descripcion || "", cantidad: Number(it.cantidad), monto: Math.round(Number(it.monto) * 100) / 100 }));
     const c = consultas.find(x => x.id === id);
     c.monto_total = items.filter(i => i.consulta_id === id).reduce((s, i) => s + i.monto, 0);
@@ -203,7 +221,8 @@
     },
     // Imita a la función buscar-productos: un resultado por nombre + categoría, desde 2 letras
     productos: {
-      async buscar(q, { limite = 8, senal } = {}) {
+      async buscar(q, { limite = 8, senal, localId } = {}) {
+        if (esPropio(localId)) return buscarPropio(localId, q, limite, false);
         const norm = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
         const buscado = norm(q);
         await new Promise((ok, mal) => {
@@ -218,7 +237,21 @@
       },
       // Imita la búsqueda por código exacto (pistola). Códigos de barras de ejemplo: 7790000000000 + posición en el catálogo
       // (Mochila Trendy = 7790000000000, Mochila NBA Lakers = 7790000000001, …) o el código interno (317000, 317007, …)
-      async porCodigo(codigo, { senal } = {}) {
+      async contar(localId) { await espera(null, 150); return articulosLocal.filter(a => a.local_id === localId && a.activo).length; },
+      async importar(localId, filas, { desactivar = true } = {}) {
+        await espera(null, 500);
+        let nuevos = 0, actualizados = 0, desactivados = 0;
+        const vistos = new Set(filas.map(f => f.codigo.toLowerCase()));
+        for (const f of filas) {
+          const a = articulosLocal.find(x => x.local_id === localId && x.codigo.toLowerCase() === f.codigo.toLowerCase());
+          if (!a) { articulosLocal.push({ local_id: localId, ...f, activo: true }); nuevos++; }
+          else if (a.nombre !== f.nombre || a.rubro !== f.rubro || a.temporada !== f.temporada || !a.activo) { Object.assign(a, f, { codigo: a.codigo, activo: true }); actualizados++; }
+        }
+        if (desactivar) articulosLocal.forEach(a => { if (a.local_id === localId && a.activo && !vistos.has(a.codigo.toLowerCase())) { a.activo = false; desactivados++; } });
+        return { total: filas.length, nuevos, actualizados, desactivados };
+      },
+      async porCodigo(codigo, { senal, localId } = {}) {
+        if (esPropio(localId)) return buscarPropio(localId, codigo, 8, true);
         codigo = String(codigo || "").replace(/\s+/g, "");
         await new Promise(ok => setTimeout(ok, 180));
         if (senal && senal.aborted) throw new DOMException("Cancelado", "AbortError");

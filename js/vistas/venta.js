@@ -84,6 +84,7 @@
         const i = Number(a.dataset.i), it = items[i];
         buscadores[i] = R.buscadorProducto.crear(a.querySelector("[data-buscador]"), {
           inicial: it,
+          localId,
           alElegir: () => { it.rubro_id = null; it.marca_id = null; redibujar(i, "[data-cant]"); },
           // Lo que se había escrito en el buscador queda como nombre del producto
           // (se lee la pantalla antes, si no el campo vacío de "Detalle" pisaría el nombre)
@@ -167,12 +168,12 @@
     async function alLeerCodigo(codigo, el) {
       if (!codigo || !cont.querySelector(".articulo")) return;
       let r;
-      try { r = await R.api.productos.porCodigo(codigo); }
+      try { r = await R.api.productos.porCodigo(codigo, { localId }); }
       catch (e) { R.util.toast("No se pudo buscar el código: " + e.message, "error", 6000); return; }
       leerPantalla();
       if (r.length === 1) {
         const p = r[0];
-        const ya = items.findIndex(it => it.modo === "catalogo" && it.producto_clave === p.clave);
+        const ya = items.findIndex(it => it.modo === "catalogo" && it.producto_clave === p.clave && (it.producto_codigo || "") === (p.codigo || ""));
         if (ya >= 0) {
           items[ya].cantidad = (Number(items[ya].cantidad) || 1) + 1;
           mostrarEn(ya);
@@ -180,7 +181,7 @@
           return;
         }
         const k = destino(el);
-        Object.assign(items[k], { modo: "catalogo", producto: p.nombre, producto_clave: p.clave, categoria: p.categoria,
+        Object.assign(items[k], { modo: "catalogo", producto: p.nombre, producto_clave: p.clave, producto_codigo: p.codigo || "", categoria: p.categoria,
           categoria_ruta: p.ruta, categoria_tn_id: p.categoria_id, rubro_id: null, marca_id: null, cantidad: items[k].cantidad || 1 });
         mostrarEn(k);
         return;
@@ -188,7 +189,7 @@
       // Ninguno o varios: queda el código en el buscador para elegir, o para cargarlo tal como está
       const k = destino(el);
       dibujar();
-      buscadores[k]?.mostrar(codigo, r, r.length ? "" : `No hay ningún producto con el código ${codigo} en Odoo.`);
+      buscadores[k]?.mostrar(codigo, r, r.length ? "" : `No hay ningún producto con el código ${codigo}.`);
     }
     if (R.lectorCodigos) R.lectorCodigos.registrar(cont, alLeerCodigo);
 
@@ -219,7 +220,7 @@
           return { ok: false, error: "Falta " + faltan.slice(0, 3).join(", ") + (faltan.length > 3 ? " y más." : ".") };
         }
         return { ok: true, datos: { envio_id, pago_id, items: items.map((i, n) => i.modo === "catalogo"
-          ? { catalogo: true, producto: i.producto, producto_clave: i.producto_clave, categoria: i.categoria, categoria_ruta: i.categoria_ruta,
+          ? { catalogo: true, producto: i.producto, producto_clave: i.producto_clave, producto_codigo: i.producto_codigo || "", categoria: i.categoria, categoria_ruta: i.categoria_ruta,
               categoria_tn_id: i.categoria_tn_id || null, rubro_id: null, marca_id: null, descripcion: i.descripcion || "", cantidad: i.cantidad, monto: i.monto }
           : i.modo === "libre"
             ? { catalogo: false, rubro_id: i.rubro_id, marca_id: i.marca_id || null, descripcion: i.descripcion || "", cantidad: i.cantidad, monto: i.monto }
@@ -352,7 +353,7 @@
   // Resumen de una consulta para tarjetas y planilla
   function textoArticulos(its) {
     return its.map(i => i.producto
-      ? `${i.producto}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`
+      ? `${i.producto}${i.producto_codigo ? " " + i.producto_codigo : ""}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`
       : i.catalogo === false && i.descripcion
         ? `${i.descripcion} (${[i.rubro, i.marca, "fuera del catálogo"].filter(Boolean).join(", ")}) x${i.cantidad}`
         : `${i.rubro || (i.catalogo === false ? "Otros" : "Sin rubro")}${i.marca ? " " + i.marca : ""}${i.descripcion ? " (" + i.descripcion + ")" : ""} x${i.cantidad}`).join(" · ");
