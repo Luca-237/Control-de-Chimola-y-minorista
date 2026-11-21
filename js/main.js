@@ -90,15 +90,18 @@
       else ir();
     },
 
-    // Cantidad de "Lo piensa" abiertos en el menú
-    async contadores() {
+    // Cantidad de "Lo piensa" abiertos en el menú, y la campanita con los que pasan las 48 horas
+    // (soloAvisos: el repaso periódico, que no tiene por qué borrar lo que el tablero ya calculó)
+    async contadores({ soloAvisos = false } = {}) {
       try {
-        const abiertos = (await R.api.abiertos(R.estado.local ? R.estado.local.id : null)).filter(c => c.estado_efectivo === "lo_piensa").length;
+        const filas = await R.api.abiertos(R.estado.local ? R.estado.local.id : null);
+        const abiertos = filas.filter(c => c.estado_efectivo === "lo_piensa").length;
         const el = $("contador-abiertos");
         el.textContent = abiertos;
         el.hidden = !abiertos;
+        R.avisos.pintar(filas);
       } catch (e) { /* el contador es un extra: si falla no se avisa */ }
-      R.vistaTablero.olvidar();
+      if (!soloAvisos) R.vistaTablero.olvidar();
     },
   };
   R.app = app;
@@ -178,6 +181,7 @@
   function salir() {
     R.estado = { perfil: null, catalogo: null, local: null };
     vistaActual = null;
+    R.avisos.pintar([]);
   }
 
   // Mientras el admin prueba como otro rol, guardar, cerrar y anular no llegan a la base: responden como si hubieran
@@ -218,6 +222,10 @@
       (svg ? svg.after(s) : l.prepend(s));
     });
     Object.values(VISTAS).forEach(x => x.v().iniciar());
+    R.avisos.iniciar();
+    // Con la página abierta todo el día, la campanita se repasa cada 5 minutos (y al volver a la pestaña)
+    setInterval(() => { if (R.estado.perfil && !document.hidden) app.contadores({ soloAvisos: true }); }, 5 * 60000);
+    document.addEventListener("visibilitychange", () => { if (R.estado.perfil && !document.hidden) app.contadores({ soloAvisos: true }); });
 
     $("local-selector").addEventListener("change", e => {
       pref.guardar("local", Number(e.target.value));

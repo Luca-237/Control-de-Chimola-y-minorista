@@ -34,8 +34,10 @@
       const dias = (locales.find(l => l.id === c.local_id) || {}).dias_lo_piensa || 15;
       const pasaron = Math.floor((Date.now() - Date.parse(c.fecha_consulta)) / 86400000);
       const quedan = dias - pasaron;
-      return `<article class="tarjeta-consulta ${c.estado_efectivo}" data-id="${c.id}">
+      const atrasada = R.avisos.esAtrasada(c);
+      return `<article class="tarjeta-consulta ${c.estado_efectivo}${atrasada ? " atrasada" : ""}" data-id="${c.id}">
         <div class="cab"><span class="cuando">${esc(c.cliente_nombre || c.cliente_contacto || "Sin datos del cliente")}</span>${chipEstado(c.estado_efectivo)}</div>
+        ${atrasada ? `<div class="aviso-atrasada">Más de ${R.avisos.HORAS_AVISO} horas sin respuesta</div>` : ""}
         ${cliente(c)}
         <div class="detalle">Consultó ${esc(hace(c.fecha_consulta))}</div>
         <div class="detalle">${esc(c.canal)}${c.atendio ? " · atendió " + esc(c.atendio) : ""}${nombreLocal(c)}${c.nota ? `<br><strong>${esc(c.nota)}</strong>` : ""}</div>
@@ -52,6 +54,16 @@
       t.querySelector("[data-cerrar-compro]")?.addEventListener("click", () => cerrarCompro(c));
       t.querySelector("[data-cerrar-no]")?.addEventListener("click", () => cerrarNo(c));
     });
+    // Llegando desde la campanita: mostrar esa tarjeta y marcarla un momento
+    const resaltar = R.estado.resaltar;
+    R.estado.resaltar = null;
+    const elegida = resaltar && document.querySelector(`#vista-abiertos [data-id="${Number(resaltar)}"]`);
+    if (elegida) {
+      elegida.scrollIntoView({ behavior: "smooth", block: "center" });
+      elegida.classList.add("resaltada");
+      setTimeout(() => elegida.classList.remove("resaltada"), 2400);
+    }
+    R.avisos.pintar(filas); // la lista recién leída también pone al día la campanita
   }
 
   async function cerrarNo(c) {
